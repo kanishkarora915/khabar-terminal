@@ -1,7 +1,4 @@
 {
   "name": "khabar-terminal",
-  "private": true,
-  "dependencies": {
-    "@netlify/blobs": "^8.1.0"
-  }
+  "private": true
 }

@@ -4,7 +4,7 @@
 
 [functions]
   node_bundler = "esbuild"
-  external_node_modules = ["https", "@netlify/blobs"]
+  external_node_modules = ["https"]
 
 [functions."kite"]
   timeout = 26
