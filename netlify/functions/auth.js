@@ -82,55 +82,88 @@ async function setApproval(store, key, data) {
   } catch(e) { console.error('Blob set error:', e); }
 }
 
-// ─── Email via Resend ─────────────────────────────
+// ─── Email via Multiple Methods ───────────────────
 function sendApprovalEmail(key, userInfo) {
-  const RESEND_KEY = process.env.RESEND_API_KEY;
-  if (!RESEND_KEY) {
-    console.log('⚠ RESEND_API_KEY not set. Skipping email. Approve manually via admin panel.');
-    return Promise.resolve(null);
-  }
-
   const siteUrl = process.env.URL || 'https://khabar-terminal.netlify.app';
   const secret = process.env.ADMIN_SECRET || DEFAULT_ADMIN_SECRET;
   const approveUrl = `${siteUrl}/.netlify/functions/auth?action=approve&key=${encodeURIComponent(key)}&secret=${encodeURIComponent(secret)}`;
   const rejectUrl = `${siteUrl}/.netlify/functions/auth?action=reject&key=${encodeURIComponent(key)}&secret=${encodeURIComponent(secret)}`;
   const panelUrl = `${siteUrl}/.netlify/functions/auth?action=panel&secret=${encodeURIComponent(secret)}`;
 
+  const emailBody = `🔔 KHABAR ACCESS REQUEST\n\nKey: ${key}\nUser: ${userInfo.user || 'Unknown'}\nTime: ${userInfo.requestedAt}\nDevice: ${(userInfo.userAgent || '').slice(0, 80)}\nIP: ${userInfo.ip || 'Unknown'}\n\n✅ APPROVE: ${approveUrl}\n\n❌ REJECT: ${rejectUrl}\n\n📋 ADMIN PANEL: ${panelUrl}`;
+
   const emailHtml = `
 <div style="background:#060b16;padding:40px 20px;font-family:Arial,sans-serif">
   <div style="max-width:500px;margin:0 auto;background:#0c1221;border:1px solid #1a2744;border-radius:16px;padding:32px;text-align:center">
     <div style="font-size:24px;font-weight:800;letter-spacing:6px;color:#00ccff;margin-bottom:4px">KHABAR</div>
     <div style="font-size:10px;color:#526580;letter-spacing:3px;margin-bottom:24px">ACCESS REQUEST</div>
-
     <div style="font-size:16px;color:#d8e3f0;font-weight:700;margin-bottom:4px">New User Requesting Access</div>
-
     <div style="background:rgba(0,204,255,0.08);border:1px solid rgba(0,204,255,0.2);border-radius:8px;padding:10px 16px;margin:16px 0;display:inline-block">
       <span style="font-family:monospace;font-size:16px;font-weight:700;color:#00ccff;letter-spacing:2px">${key}</span>
     </div>
-
-    <div style="color:#526580;font-size:12px;margin:12px 0;line-height:2">
+    <div style="color:#526580;font-size:12px;margin:12px 0;line-height:2;text-align:left;padding:0 10px">
       <b style="color:#d8e3f0">User:</b> ${userInfo.user || 'Unknown'}<br>
       <b style="color:#d8e3f0">Time:</b> ${userInfo.requestedAt}<br>
       <b style="color:#d8e3f0">Device:</b> ${(userInfo.userAgent || '').slice(0, 80)}<br>
       <b style="color:#d8e3f0">IP:</b> ${userInfo.ip || 'Unknown'}
     </div>
-
     <div style="margin:24px 0">
       <a href="${approveUrl}" style="display:inline-block;padding:14px 40px;background:#00e676;color:#000;border-radius:10px;text-decoration:none;font-weight:800;font-size:15px;letter-spacing:1px;margin:6px">✓ APPROVE</a>
       <a href="${rejectUrl}" style="display:inline-block;padding:14px 40px;background:#ff3355;color:#fff;border-radius:10px;text-decoration:none;font-weight:800;font-size:15px;letter-spacing:1px;margin:6px">✕ REJECT</a>
     </div>
-
     <div style="font-size:10px;color:#526580;margin-top:16px;border-top:1px solid #1a2744;padding-top:12px">
-      <a href="${panelUrl}" style="color:#00ccff;text-decoration:none">View Admin Panel</a> &bull;
-      User is waiting for your approval
+      <a href="${panelUrl}" style="color:#00ccff;text-decoration:none">View Admin Panel</a>
     </div>
   </div>
 </div>`;
 
+  // Try all methods in parallel — at least one will work
+  return Promise.allSettled([
+    sendViaFormSubmit(key, emailBody, approveUrl, rejectUrl),
+    sendViaResend(key, emailHtml),
+    sendViaNtfy(key, emailBody, approveUrl, rejectUrl)
+  ]).then(results => {
+    const any = results.some(r => r.status === 'fulfilled' && r.value === true);
+    console.log('Email results:', results.map(r => r.status === 'fulfilled' ? r.value : r.reason));
+    return any;
+  });
+}
+
+// Method 1: FormSubmit.co — FREE, no signup, no API key
+function sendViaFormSubmit(key, body, approveUrl, rejectUrl) {
+  const payload = JSON.stringify({
+    email: ADMIN_EMAIL,
+    _subject: `🔔 KHABAR: Approve Access — ${key}`,
+    message: body,
+    _template: 'box',
+    _captcha: 'false'
+  });
+  return new Promise((resolve) => {
+    const req = https.request({
+      hostname: 'formsubmit.co',
+      path: `/ajax/${ADMIN_EMAIL}`,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }
+    }, (res) => {
+      let d = ''; res.on('data', c => d += c);
+      res.on('end', () => { console.log('FormSubmit:', res.statusCode, d); resolve(res.statusCode < 300); });
+    });
+    req.on('error', () => resolve(false));
+    req.setTimeout(8000, () => { req.destroy(); resolve(false); });
+    req.write(payload);
+    req.end();
+  });
+}
+
+// Method 2: Resend API (if key is set + domain verified)
+function sendViaResend(key, emailHtml) {
+  const RESEND_KEY = process.env.RESEND_API_KEY;
+  if (!RESEND_KEY) return Promise.resolve(false);
+
   const payload = JSON.stringify({
     from: 'KHABAR Terminal <onboarding@resend.dev>',
     to: [ADMIN_EMAIL],
-    subject: `🔔 KHABAR: Approve Access — ${key} (${userInfo.user || 'New User'})`,
+    subject: `🔔 KHABAR: Approve Access — ${key}`,
     html: emailHtml
   });
 
@@ -147,14 +180,36 @@ function sendApprovalEmail(key, userInfo) {
     }, (res) => {
       let body = '';
       res.on('data', c => body += c);
-      res.on('end', () => {
-        console.log('Email sent:', res.statusCode, body);
-        resolve(res.statusCode < 300);
-      });
+      res.on('end', () => { console.log('Resend:', res.statusCode, body); resolve(res.statusCode < 300); });
     });
-    req.on('error', (e) => { console.error('Email error:', e); resolve(false); });
+    req.on('error', () => resolve(false));
     req.setTimeout(8000, () => { req.destroy(); resolve(false); });
     req.write(payload);
+    req.end();
+  });
+}
+
+// Method 3: ntfy.sh — FREE push notifications, no signup, instant
+function sendViaNtfy(key, body, approveUrl, rejectUrl) {
+  return new Promise((resolve) => {
+    const req = https.request({
+      hostname: 'ntfy.sh',
+      path: '/khabar-admin-kanishk',
+      method: 'POST',
+      headers: {
+        'Title': `KHABAR: Approve ${key}`,
+        'Priority': 'high',
+        'Tags': 'key,lock',
+        'Actions': `view, ✅ Approve, ${approveUrl}, clear=true; view, ❌ Reject, ${rejectUrl}, clear=true`,
+        'Content-Type': 'text/plain'
+      }
+    }, (res) => {
+      let d = ''; res.on('data', c => d += c);
+      res.on('end', () => { console.log('ntfy:', res.statusCode); resolve(res.statusCode < 300); });
+    });
+    req.on('error', () => resolve(false));
+    req.setTimeout(5000, () => { req.destroy(); resolve(false); });
+    req.write(body);
     req.end();
   });
 }
