@@ -993,9 +993,10 @@ async function kiteApi(action, params = {}) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action, api_key: APP.kite.api_key, access_token: APP.kite.access_token, ...params })
     });
-    if (r.status === 401) { onKiteExpired(); return null; }
     const data = await r.json();
-    if (data?.expired || data?._tokenExpired) { onKiteExpired(); return null; }
+    // Only expire on confirmed TokenException, NOT on InputException or other errors
+    if (data?.expired === true && r.status === 401) { onKiteExpired(); return null; }
+    if (data?._tokenExpired === true) { onKiteExpired(); return null; }
     if (data?.error) { console.warn(`KITE ${action} error:`, data.error); }
     if (!APP.connected) { APP.connected = true; $('conn-dot').className = 'dot dg'; $('conn-txt').textContent = 'KITE LIVE'; }
     return data;

@@ -18,7 +18,7 @@ function kiteFetch(path, apiKey, token, method = 'GET', postData = null) {
       res.on('end', () => {
         try {
           const parsed = JSON.parse(data);
-          if (parsed.status === 'error' && (parsed.error_type === 'TokenException' || parsed.error_type === 'InputException')) {
+          if (parsed.status === 'error' && parsed.error_type === 'TokenException') {
             resolve({ _tokenExpired: true, error: parsed.message, error_type: parsed.error_type });
           } else { resolve(parsed); }
         } catch (e) { resolve({ error: data.slice(0, 500) }); }
