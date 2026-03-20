@@ -1,0 +1,1571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>KHABAR — Professional Trading Terminal</title>
+<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#060b16;--s1:#0c1221;--s2:#111a2e;--bd:#1a2744;--a:#00ccff;--a2:#ff6b35;--g:#00e676;--r:#ff3355;--y:#ffc107;--p:#b388ff;--t:#d8e3f0;--m:#526580;--f1:'Inter',sans-serif;--f2:'Space Mono',monospace}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--t);font-family:var(--f2);font-size:12px;overflow-x:hidden}
+::-webkit-scrollbar{width:4px;height:4px}::-webkit-scrollbar-thumb{background:var(--bd);border-radius:2px}::-webkit-scrollbar-track{background:transparent}
+.hdr{display:flex;align-items:center;gap:16px;padding:8px 20px;border-bottom:1px solid var(--bd);background:rgba(6,11,22,.95);position:sticky;top:0;z-index:200;backdrop-filter:blur(12px)}
+.logo{font-family:var(--f1);font-size:18px;font-weight:800;letter-spacing:4px;background:linear-gradient(135deg,var(--a),var(--p));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.nav{display:flex;gap:4px;margin-left:20px}
+.nav-btn{padding:6px 14px;border-radius:6px;border:1px solid var(--bd);font-size:10px;cursor:pointer;color:var(--m);background:transparent;font-family:var(--f2);transition:all .2s;letter-spacing:1px}
+.nav-btn:hover,.nav-btn.on{border-color:var(--a);color:var(--a);background:rgba(0,204,255,.08)}
+.hdr-r{margin-left:auto;display:flex;gap:14px;align-items:center;font-size:10px;color:var(--m)}
+.dot{width:6px;height:6px;border-radius:50%;display:inline-block;margin-right:4px}
+.dg{background:var(--g);box-shadow:0 0 6px var(--g);animation:pulse 2s infinite}
+.dr{background:var(--r)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.tape-wrap{background:var(--s1);border-bottom:1px solid var(--bd);padding:5px 0;overflow:hidden}
+.tape{display:flex;gap:32px;animation:scroll 40s linear infinite;white-space:nowrap;font-size:10px}
+@keyframes scroll{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
+.ti{color:var(--m)}.ti b{margin-left:4px}
+.main{padding:14px 18px;max-width:1880px;margin:0 auto}
+.page{display:none}.page.on{display:block}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:12px}
+.g21{display:grid;grid-template-columns:2.2fr 1fr;gap:12px;margin-bottom:12px}
+.g12{display:grid;grid-template-columns:1fr 2.2fr;gap:12px;margin-bottom:12px}
+.pn{background:var(--s1);border:1px solid var(--bd);border-radius:10px;padding:14px;overflow:hidden}
+.ph{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.pt{font-family:var(--f1);font-size:10px;font-weight:600;letter-spacing:2px;color:var(--m);text-transform:uppercase}
+.badge{font-size:9px;padding:3px 8px;border-radius:12px;font-weight:700;letter-spacing:.5px}
+.bg{background:rgba(0,230,118,.12);color:var(--g);border:1px solid rgba(0,230,118,.3)}
+.br{background:rgba(255,51,85,.12);color:var(--r);border:1px solid rgba(255,51,85,.3)}
+.by{background:rgba(255,193,7,.12);color:var(--y);border:1px solid rgba(255,193,7,.3)}
+.ba{background:rgba(0,204,255,.12);color:var(--a);border:1px solid rgba(0,204,255,.3)}
+.bp{background:rgba(179,136,255,.12);color:var(--p);border:1px solid rgba(179,136,255,.3)}
+.up{color:var(--g)}.dn{color:var(--r)}.neu{color:var(--y)}
+.btn{padding:8px 16px;border-radius:6px;border:none;font-family:var(--f2);font-size:10px;cursor:pointer;transition:all .2s;font-weight:700;letter-spacing:1px}
+.btn-a{background:var(--a);color:#000}.btn-g{background:var(--g);color:#000}.btn-b{background:transparent;color:var(--a);border:1px solid var(--a)}
+.btn:hover{filter:brightness(1.15);transform:translateY(-1px)}
+.search-row{display:flex;gap:8px;margin-bottom:12px}
+.search-row input{flex:1;background:var(--s1);border:1px solid var(--bd);color:var(--t);padding:12px 16px;border-radius:8px;font-family:var(--f1);font-size:18px;font-weight:700;outline:none;letter-spacing:2px;text-transform:uppercase}
+.search-row input:focus{border-color:var(--a);box-shadow:0 0 0 2px rgba(0,204,255,.15)}
+.search-row input::placeholder{color:var(--m);font-size:12px;letter-spacing:1px;font-weight:400;text-transform:none}
+.ac-wrap{position:relative}.ac{position:absolute;top:100%;left:0;right:0;background:var(--s2);border:1px solid var(--a);border-radius:8px;z-index:999;max-height:280px;overflow-y:auto;display:none;box-shadow:0 12px 40px rgba(0,0,0,.6)}
+.ac-item{display:flex;justify-content:space-between;align-items:center;padding:8px 14px;border-bottom:1px solid var(--bd);cursor:pointer;font-size:11px}
+.ac-item:hover{background:rgba(0,204,255,.06)}
+.ac-sym{font-family:var(--f1);font-weight:700;color:var(--a);font-size:13px}
+.tags{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:12px}
+.tag{padding:4px 10px;border-radius:16px;border:1px solid var(--bd);font-size:9px;cursor:pointer;color:var(--m);background:transparent;font-family:var(--f2);transition:all .2s}
+.tag:hover{border-color:var(--a);color:var(--a)}
+.stock-hdr{background:var(--s1);border:1px solid var(--bd);border-radius:10px;padding:16px 20px;margin-bottom:12px;display:none}
+.sh-price{font-family:var(--f1);font-size:38px;font-weight:800}
+.sh-cards{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-top:12px}
+.shc{background:var(--s2);border:1px solid var(--bd);border-radius:6px;padding:8px 10px}
+.shc-l{font-size:8px;color:var(--m);letter-spacing:1px;text-transform:uppercase;margin-bottom:3px}
+.shc-v{font-family:var(--f1);font-size:14px;font-weight:700}
+.sig-banner{border-radius:10px;padding:14px 20px;margin-bottom:12px;display:none}
+.sig-banner.buy{background:linear-gradient(135deg,rgba(0,230,118,.07),rgba(0,204,255,.03));border:1px solid rgba(0,230,118,.3)}
+.sig-banner.sell{background:linear-gradient(135deg,rgba(255,51,85,.07),rgba(255,107,53,.03));border:1px solid rgba(255,51,85,.3)}
+.sig-banner.hold{background:linear-gradient(135deg,rgba(255,193,7,.05),rgba(179,136,255,.03));border:1px solid rgba(255,193,7,.3)}
+.tbl{width:100%;border-collapse:collapse;font-size:11px}
+.tbl td,.tbl th{padding:6px 8px;text-align:left;border-bottom:1px solid var(--bd)}
+.tbl th{font-size:9px;color:var(--m);letter-spacing:1px;text-transform:uppercase}
+.oc-table{width:100%;border-collapse:collapse;font-size:10px}
+.oc-table td,.oc-table th{padding:5px 6px;text-align:center;border-bottom:1px solid var(--bd)}
+.oc-table th{font-size:8px;color:var(--m);letter-spacing:1px;background:var(--s2)}
+.oc-table tr:hover td{background:rgba(255,255,255,.02)}
+.oc-atm{background:rgba(255,193,7,.08)!important;font-weight:700}
+.shg{display:grid;grid-template-columns:repeat(4,1fr);gap:5px}
+.sheat{padding:8px 4px;border-radius:6px;text-align:center;font-size:9px;font-weight:700;cursor:default}
+.ai-box{background:var(--bg);border-left:2px solid var(--a);border-radius:6px;padding:12px;font-size:11px;line-height:1.8;min-height:70px}
+.si{display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:var(--bg);border-radius:5px;border-left:3px solid var(--m);font-size:10px;margin-bottom:4px}
+.si.buy{border-left-color:var(--g)}.si.sell{border-left-color:var(--r)}.si.hold{border-left-color:var(--y)}
+.toast{position:fixed;bottom:16px;right:16px;background:var(--s1);border:1px solid var(--bd);padding:10px 16px;border-radius:8px;font-size:11px;z-index:9999;transform:translateY(60px);opacity:0;transition:all .3s;max-width:360px}
+.toast.show{transform:translateY(0);opacity:1}
+.toast.ok{border-left:3px solid var(--g)}.toast.err{border-left:3px solid var(--r)}.toast.info{border-left:3px solid var(--a)}
+.news-popup{position:fixed;top:60px;right:16px;width:360px;background:var(--s1);border:1px solid var(--r);border-radius:10px;padding:14px;z-index:9998;transform:translateX(400px);transition:transform .4s;box-shadow:0 8px 30px rgba(0,0,0,.5)}
+.news-popup.show{transform:translateX(0)}
+.news-popup .np-title{font-family:var(--f1);font-size:12px;font-weight:700;margin-bottom:4px}
+.news-popup .np-src{font-size:9px;color:var(--r);letter-spacing:1px}
+.news-item{padding:8px 0;border-bottom:1px solid var(--bd);font-size:10px;line-height:1.6}
+.news-item:last-child{border-bottom:none}
+.news-hi{border-left:2px solid var(--r);padding-left:8px}
+.news-src{font-size:8px;padding:2px 5px;border-radius:3px;background:rgba(0,204,255,.1);color:var(--a);margin-right:4px}
+.spin{display:inline-block;width:12px;height:12px;border:2px solid var(--bd);border-top-color:var(--a);border-radius:50%;animation:sp .6s linear infinite;vertical-align:middle}
+@keyframes sp{to{transform:rotate(360deg)}}
+.oc-summary-card{text-align:center}.oc-big{font-family:var(--f1);font-size:26px;font-weight:800}
+.strike-item{display:flex;justify-content:space-between;padding:6px 10px;background:var(--bg);border-radius:5px;margin-bottom:4px;font-size:10px}
+@media(max-width:1200px){.g21,.g12,.g2{grid-template-columns:1fr}.g3,.g4{grid-template-columns:1fr 1fr}.sh-cards{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:768px){.g3,.g4{grid-template-columns:1fr}.sh-cards{grid-template-columns:repeat(2,1fr)}.hdr{flex-wrap:wrap}.nav{margin-left:0}}
+/* LOGIN */
+#login-screen{position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;align-items:center;justify-content:center}
+#login-screen.hidden{display:none}
+.login-card{background:var(--s1);border:1px solid var(--bd);border-radius:16px;padding:40px;width:460px;text-align:center}
+.login-logo{font-family:var(--f1);font-size:42px;font-weight:800;letter-spacing:6px;background:linear-gradient(135deg,var(--a),var(--p),var(--a2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:6px}
+.login-sub{font-size:10px;color:var(--m);letter-spacing:3px;margin-bottom:30px}
+.login-field{text-align:left;margin-bottom:12px}
+.login-field label{font-size:9px;color:var(--m);letter-spacing:1px;display:block;margin-bottom:4px}
+.login-field input{width:100%;background:var(--bg);border:1px solid var(--bd);color:var(--t);padding:10px 14px;border-radius:6px;font-family:var(--f2);font-size:11px;outline:none}
+.login-field input:focus{border-color:var(--a)}
+.login-btn{display:block;width:100%;padding:14px;background:linear-gradient(135deg,#387ed1,#2c6fbe);color:#fff;border:none;border-radius:10px;font-family:var(--f1);font-size:14px;font-weight:700;cursor:pointer;letter-spacing:2px;margin-top:16px;margin-bottom:10px}
+.login-btn:hover{filter:brightness(1.15)}
+.login-hint{font-size:9px;color:var(--m);line-height:1.8;margin-top:16px;padding:10px;background:rgba(0,0,0,.3);border-radius:6px}
+.relogin-bar{background:linear-gradient(90deg,rgba(255,51,85,.15),rgba(255,107,53,.1));border:1px solid var(--r);border-radius:8px;padding:10px 16px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;font-size:11px}
+.relogin-bar.hidden{display:none}
+</style>
+</head>
+<body>
+
+<!-- LOGIN SCREEN -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-logo">KHABAR</div>
+    <div class="login-sub">PROFESSIONAL TRADING TERMINAL</div>
+    <div class="login-field">
+      <label>ZERODHA API KEY</label>
+      <input id="inp-api-key" type="text" placeholder="Your Kite Connect API Key" value="">
+    </div>
+    <div class="login-field">
+      <label>ZERODHA API SECRET</label>
+      <input id="inp-api-secret" type="password" placeholder="Your Kite Connect API Secret">
+    </div>
+    <button class="login-btn" onclick="saveAndLogin()">🔐 SAVE & LOGIN WITH ZERODHA</button>
+    <div style="font-size:10px;color:var(--m);margin:8px 0">— OR —</div>
+    <div class="login-field">
+      <label>PASTE ACCESS TOKEN (if you already have one today)</label>
+      <input id="inp-manual-token" type="password" placeholder="Paste access_token here...">
+    </div>
+    <button class="btn btn-b" onclick="manualTokenLogin()" style="width:100%;padding:10px">USE THIS TOKEN</button>
+    <div class="login-hint">
+      <b style="color:var(--a)">📌 How it works:</b><br>
+      1. Enter API Key + Secret <b>ONCE</b> — saved permanently in your browser<br>
+      2. Click "Login with Zerodha" → redirects to Kite → comes back automatically<br>
+      3. Token exchange happens securely on server — <b>API secret is NEVER exposed</b><br>
+      4. <b style="color:var(--r)">Daily re-login zaruri hai</b> — Zerodha/SEBI requirement (not our code)<br>
+      5. When token expires → dashboard shows "Re-login" button (NO crash!)
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<!-- NEWS POPUP -->
+<div class="news-popup" id="news-popup">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+    <span class="np-src">🔴 BREAKING</span>
+    <span style="cursor:pointer;color:var(--m);font-size:14px" onclick="closeNewsPopup()">✕</span>
+  </div>
+  <div class="np-title" id="np-title"></div>
+  <div style="font-size:10px;color:var(--m);margin-top:4px" id="np-desc"></div>
+</div>
+
+<!-- HEADER -->
+<div class="hdr">
+  <div class="logo">KHABAR</div>
+  <div class="nav">
+    <button class="nav-btn on" onclick="showPage('equity',this)">📈 EQUITY</button>
+    <button class="nav-btn" onclick="showPage('fno',this)">⚡ F&O</button>
+  </div>
+  <div class="hdr-r">
+    <span><span class="dot dg" id="conn-dot"></span><span id="conn-txt">CONNECTING</span></span>
+    <span id="hclock" style="color:var(--a)">--:--:--</span>
+    <span id="mkt-st">—</span>
+    <button class="btn btn-b" onclick="logout()" style="padding:4px 10px;font-size:9px">LOGOUT</button>
+  </div>
+</div>
+
+<!-- TICKER TAPE -->
+<div class="tape-wrap">
+  <div class="tape" id="ticker-tape">
+    <span class="ti">NIFTY 50 <b id="t-n50">—</b></span>
+    <span class="ti">SENSEX <b id="t-sensex">—</b></span>
+    <span class="ti">BANK NIFTY <b id="t-bnf">—</b></span>
+    <span class="ti">FIN NIFTY <b id="t-fin">—</b></span>
+    <span class="ti">NIFTY IT <b id="t-nit">—</b></span>
+    <span class="ti">NIFTY MIDCAP <b id="t-mid">—</b></span>
+    <span class="ti">NIFTY AUTO <b id="t-auto">—</b></span>
+    <span class="ti">NIFTY PHARMA <b id="t-pharma">—</b></span>
+    <span class="ti">NIFTY 50 <b id="t-n50b">—</b></span>
+    <span class="ti">SENSEX <b id="t-sensexb">—</b></span>
+    <span class="ti">BANK NIFTY <b id="t-bnfb">—</b></span>
+    <span class="ti">FIN NIFTY <b id="t-finb">—</b></span>
+    <span class="ti">NIFTY IT <b id="t-nitb">—</b></span>
+    <span class="ti">NIFTY MIDCAP <b id="t-midb">—</b></span>
+  </div>
+</div>
+
+<div class="main">
+
+<!-- RE-LOGIN BAR (shown when token expires) -->
+<div class="relogin-bar hidden" id="relogin-bar">
+  <span>⚠️ <b>Zerodha token expired</b> — Quotes paused. Option chain (NSE) still works.</span>
+  <button class="btn btn-a" onclick="redirectToKiteLogin()" style="padding:6px 14px">🔑 RE-LOGIN (2 sec)</button>
+</div>
+
+<!-- ═══════════ EQUITY PAGE ═══════════ -->
+<div class="page on" id="page-equity">
+  <div class="search-row">
+    <div class="ac-wrap" style="flex:1">
+      <input id="search-input" placeholder="Search NSE/BSE stock..." autocomplete="off" oninput="onSearch(this.value)" onkeydown="onSearchKey(event)">
+      <div class="ac" id="ac-list"></div>
+    </div>
+    <button class="btn btn-g" onclick="analyzeStock()" style="padding:12px 24px;font-size:12px">▶ ANALYZE</button>
+  </div>
+  <div class="tags" id="quick-tags">
+    <button class="tag" onclick="quickLoad('RELIANCE')">RELIANCE</button>
+    <button class="tag" onclick="quickLoad('TCS')">TCS</button>
+    <button class="tag" onclick="quickLoad('HDFCBANK')">HDFCBANK</button>
+    <button class="tag" onclick="quickLoad('INFY')">INFY</button>
+    <button class="tag" onclick="quickLoad('SBIN')">SBIN</button>
+    <button class="tag" onclick="quickLoad('TATAMOTORS')">TATAMOTORS</button>
+    <button class="tag" onclick="quickLoad('BAJFINANCE')">BAJFINANCE</button>
+    <button class="tag" onclick="quickLoad('ITC')">ITC</button>
+    <button class="tag" onclick="quickLoad('ZOMATO')">ZOMATO</button>
+    <button class="tag" onclick="quickLoad('HAL')">HAL</button>
+  </div>
+
+  <!-- STOCK HEADER -->
+  <div class="stock-hdr" id="stock-hdr">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px">
+      <div>
+        <div style="font-size:11px;color:var(--m);letter-spacing:2px" id="sh-name">—</div>
+        <div style="display:flex;align-items:baseline;gap:10px;margin-top:2px">
+          <div class="sh-price" id="sh-price">—</div>
+          <div id="sh-chg" style="font-size:13px;padding:3px 8px;border-radius:5px">—</div>
+        </div>
+      </div>
+      <div style="text-align:right;font-size:10px;color:var(--m)" id="sh-meta">—</div>
+    </div>
+    <div class="sh-cards" id="sh-cards"></div>
+  </div>
+
+  <!-- SIGNAL BANNER -->
+  <div class="sig-banner" id="sig-banner">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+      <div>
+        <div style="font-family:var(--f1);font-size:28px;font-weight:800" id="sig-main">—</div>
+        <div style="font-size:10px;color:var(--m);margin-top:3px" id="sig-sub">—</div>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap" id="sig-badges"></div>
+    </div>
+    <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:10px;margin-top:8px" id="sig-levels"></div>
+  </div>
+
+  <!-- CHART + AI ANALYSIS -->
+  <div class="g21">
+    <div class="pn">
+      <div class="ph">
+        <div class="pt">📈 PRICE CHART + VOLUME</div>
+        <div style="display:flex;gap:4px" id="chart-btns">
+          <button class="nav-btn" onclick="setChartRange('1m','5minute')">1D</button>
+          <button class="nav-btn" onclick="setChartRange('5d','15minute')">5D</button>
+          <button class="nav-btn on" onclick="setChartRange('3mo','1d')">3M</button>
+          <button class="nav-btn" onclick="setChartRange('6mo','1d')">6M</button>
+          <button class="nav-btn" onclick="setChartRange('1y','1d')">1Y</button>
+        </div>
+      </div>
+      <div id="main-chart" style="height:340px"></div>
+    </div>
+    <div class="pn">
+      <div class="ph"><div class="pt">🤖 AI CHART ANALYSIS</div><span class="badge bp">AUTO</span></div>
+      <div class="ai-box" id="ai-analysis"><span style="color:var(--m)">Search & analyze a stock to see AI-powered analysis with entry, target, stop loss...</span></div>
+      <div style="margin-top:8px">
+        <div class="pt" style="margin-bottom:6px">⚡ SIGNALS</div>
+        <div id="signals-list"><div style="color:var(--m);text-align:center;padding:10px">—</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- INDICATORS + SECTOR + NEWS -->
+  <div class="g3">
+    <div class="pn">
+      <div class="ph"><div class="pt">📊 TECHNICAL INDICATORS</div></div>
+      <div style="max-height:300px;overflow-y:auto"><table class="tbl" id="ind-table"><tr><td style="color:var(--m);text-align:center">Analyze a stock first</td></tr></table></div>
+    </div>
+    <div class="pn">
+      <div class="ph"><div class="pt">🏭 SECTOR HEATMAP</div><span class="badge ba" id="sect-time">—</span></div>
+      <div class="shg" id="sector-heatmap"></div>
+    </div>
+    <div class="pn">
+      <div class="ph"><div class="pt">📰 LIVE NEWS</div><span class="badge br" id="news-count">—</span></div>
+      <div id="news-feed" style="max-height:300px;overflow-y:auto"><div style="color:var(--m);text-align:center;padding:20px"><span class="spin"></span> Loading news...</div></div>
+    </div>
+  </div>
+
+  <!-- BANK OI + FIBONACCI -->
+  <div class="g2">
+    <div class="pn">
+      <div class="ph"><div class="pt">🏦 BANKING STOCKS — OI & DETAILS</div><span class="badge ba">LIVE</span></div>
+      <div id="bank-oi-panel" style="max-height:280px;overflow-y:auto"><div style="color:var(--m);text-align:center;padding:20px"><span class="spin"></span> Loading...</div></div>
+    </div>
+    <div class="pn">
+      <div class="ph"><div class="pt">📐 FIBONACCI + PIVOT</div></div>
+      <div style="max-height:280px;overflow-y:auto"><table class="tbl" id="fib-table"><tr><td style="color:var(--m);text-align:center">Analyze a stock first</td></tr></table></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ F&O PAGE ═══════════ -->
+<div class="page" id="page-fno">
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
+    <div style="font-size:10px;color:var(--m);letter-spacing:2px">INDEX:</div>
+    <button class="nav-btn on" onclick="loadFnO('NIFTY',this)" id="fno-nifty">NIFTY</button>
+    <button class="nav-btn" onclick="loadFnO('BANKNIFTY',this)" id="fno-bnf">BANKNIFTY</button>
+    <button class="nav-btn" onclick="loadFnO('FINNIFTY',this)" id="fno-fin">FINNIFTY</button>
+    <button class="nav-btn" onclick="loadFnO('MIDCPNIFTY',this)" id="fno-mcp">MIDCPNIFTY</button>
+    <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+      <span style="font-size:9px;color:var(--m)">EXPIRY:</span>
+      <select id="expiry-sel" onchange="changeExpiry()" style="background:var(--s2);border:1px solid var(--bd);color:var(--t);padding:5px 8px;border-radius:5px;font-family:var(--f2);font-size:10px"></select>
+      <button class="btn btn-b" onclick="refreshFnO()" style="padding:5px 10px;font-size:9px">↻ REFRESH</button>
+    </div>
+  </div>
+
+  <!-- KEY METRICS -->
+  <div class="g4" id="fno-metrics">
+    <div class="pn oc-summary-card"><div class="pt" style="margin-bottom:6px">SPOT PRICE</div><div class="oc-big" id="fno-spot">—</div><div style="font-size:10px;color:var(--m);margin-top:3px" id="fno-spot-chg">—</div></div>
+    <div class="pn oc-summary-card"><div class="pt" style="margin-bottom:6px">PUT-CALL RATIO</div><div class="oc-big" id="fno-pcr" style="color:var(--y)">—</div><div style="font-size:10px;color:var(--m);margin-top:3px" id="fno-pcr-st">—</div></div>
+    <div class="pn oc-summary-card"><div class="pt" style="margin-bottom:6px">MAX PAIN</div><div class="oc-big" id="fno-pain" style="color:var(--p)">—</div><div style="font-size:10px;color:var(--m);margin-top:3px">Options expire here</div></div>
+    <div class="pn oc-summary-card"><div class="pt" style="margin-bottom:6px">🎯 MARKET SIGNAL</div><div class="oc-big" id="fno-signal">—</div><div style="font-size:10px;color:var(--m);margin-top:3px" id="fno-signal-desc">—</div></div>
+  </div>
+
+  <!-- FUTURES DATA -->
+  <div class="pn" style="margin-bottom:12px">
+    <div class="ph"><div class="pt">📊 FUTURES DATA</div><span class="badge ba">LIVE</span></div>
+    <div id="futures-panel" style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;text-align:center">
+      <div><div style="font-size:9px;color:var(--m)">SPOT</div><div style="font-family:var(--f1);font-size:16px;font-weight:700" id="fut-spot">—</div></div>
+      <div><div style="font-size:9px;color:var(--m)">TOTAL CALL OI</div><div style="font-family:var(--f1);font-size:16px;font-weight:700;color:var(--g)" id="fut-call-oi">—</div></div>
+      <div><div style="font-size:9px;color:var(--m)">TOTAL PUT OI</div><div style="font-family:var(--f1);font-size:16px;font-weight:700;color:var(--r)" id="fut-put-oi">—</div></div>
+      <div><div style="font-size:9px;color:var(--m)">CALL/PUT OI RATIO</div><div style="font-family:var(--f1);font-size:16px;font-weight:700;color:var(--y)" id="fut-ratio">—</div></div>
+      <div><div style="font-size:9px;color:var(--m)">TOTAL VOLUME</div><div style="font-family:var(--f1);font-size:16px;font-weight:700;color:var(--a)" id="fut-vol">—</div></div>
+    </div>
+  </div>
+
+  <!-- OI ANALYSIS -->
+  <div class="g4" style="margin-bottom:12px">
+    <div class="pn"><div class="ph"><div class="pt">🟢 MAX CALL OI</div><span class="badge br">RESISTANCE</span></div><div class="oc-big dn" id="max-call-oi-strike">—</div><div style="font-size:10px;color:var(--m);margin-top:3px" id="max-call-oi-val">—</div></div>
+    <div class="pn"><div class="ph"><div class="pt">🔴 MAX PUT OI</div><span class="badge bg">SUPPORT</span></div><div class="oc-big up" id="max-put-oi-strike">—</div><div style="font-size:10px;color:var(--m);margin-top:3px" id="max-put-oi-val">—</div></div>
+    <div class="pn"><div class="ph"><div class="pt">📈 MAX CALL OI CHG</div></div><div class="oc-big" id="max-call-chg-strike" style="color:var(--a)">—</div><div style="font-size:10px;color:var(--m);margin-top:3px" id="max-call-chg-val">—</div></div>
+    <div class="pn"><div class="ph"><div class="pt">📉 MAX PUT OI CHG</div></div><div class="oc-big" id="max-put-chg-strike" style="color:var(--a)">—</div><div style="font-size:10px;color:var(--m);margin-top:3px" id="max-put-chg-val">—</div></div>
+  </div>
+
+  <!-- OPTION CHAIN TABLE -->
+  <div class="pn" style="margin-bottom:12px">
+    <div class="ph">
+      <div class="pt">⛓ OPTION CHAIN — LIVE OI + VOLUME</div>
+      <span class="badge bg" id="oc-live-badge">LIVE</span>
+    </div>
+    <div style="overflow-x:auto">
+      <table class="oc-table" id="oc-table">
+        <thead>
+          <tr><th colspan="5" style="color:var(--g);background:rgba(0,230,118,.04)">CALLS</th><th style="background:rgba(255,193,7,.08);color:var(--y)">STRIKE</th><th colspan="5" style="color:var(--r);background:rgba(255,51,85,.04)">PUTS</th></tr>
+          <tr><th style="color:var(--g)">OI</th><th style="color:var(--g)">Chg OI</th><th style="color:var(--g)">Vol</th><th style="color:var(--g)">IV</th><th style="color:var(--g)">LTP</th><th style="color:var(--y)">STRIKE</th><th style="color:var(--r)">LTP</th><th style="color:var(--r)">IV</th><th style="color:var(--r)">Vol</th><th style="color:var(--r)">Chg OI</th><th style="color:var(--r)">OI</th></tr>
+        </thead>
+        <tbody id="oc-body"><tr><td colspan="11" style="color:var(--m);text-align:center;padding:20px">Select index to load option chain</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- MAJOR STRIKES + SUGGESTIONS -->
+  <div class="g2">
+    <div class="pn">
+      <div class="ph"><div class="pt">🟢 CALL BUYING & PUT BUYING — MAJOR STRIKES</div></div>
+      <div id="buying-panel"><div style="color:var(--m);text-align:center;padding:15px">Load option chain first</div></div>
+    </div>
+    <div class="pn">
+      <div class="ph"><div class="pt">🔴 CALL SELLING & PUT SELLING — MAJOR STRIKES</div></div>
+      <div id="selling-panel"><div style="color:var(--m);text-align:center;padding:15px">Load option chain first</div></div>
+    </div>
+  </div>
+
+  <!-- AUTO SUGGESTION + HIDDEN OI + TREND -->
+  <div class="g3">
+    <div class="pn">
+      <div class="ph"><div class="pt">🎯 AUTO SUGGESTION</div><span class="badge bp">AI CALC</span></div>
+      <div id="auto-suggestion"><div style="color:var(--m);text-align:center;padding:15px">Analyzing...</div></div>
+    </div>
+    <div class="pn">
+      <div class="ph"><div class="pt">👁 HIDDEN OI COOKING</div><span class="badge by">REALTIME</span></div>
+      <div id="hidden-oi" style="max-height:220px;overflow-y:auto"><div style="color:var(--m);text-align:center;padding:15px">Scanning...</div></div>
+    </div>
+    <div class="pn">
+      <div class="ph"><div class="pt">📡 MARKET TREND SIGNAL</div><span class="badge bg">LIVE</span></div>
+      <div id="trend-signal"><div style="color:var(--m);text-align:center;padding:15px">Calculating...</div></div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /main -->
+
+<script>
+// ═══════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════
+const APP = {
+  page: 'equity', symbol: '', quote: null, history: [], analysis: null,
+  chart: null, candleSeries: null, volSeries: null, sma20Series: null, sma50Series: null,
+  fno: { index: 'NIFTY', expiry: '', data: null, processed: null },
+  indices: {}, news: [], lastNewsTitle: '', bankData: [],
+  timers: {}, connected: false, chartRange: '3mo', chartInterval: '1d',
+  // Zerodha Auth
+  kite: { api_key: '', api_secret: '', access_token: '', active: false }
+};
+
+const NSE_API = '/.netlify/functions/nse';
+const KITE_API = '/.netlify/functions/kite';
+const NEWS_API = '/.netlify/functions/news';
+const $ = id => document.getElementById(id);
+const fmt = v => '₹' + Number(v).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+const fmtL = v => v >= 1e7 ? (v/1e7).toFixed(2) + ' Cr' : v >= 1e5 ? (v/1e5).toFixed(2) + ' L' : v >= 1e3 ? (v/1e3).toFixed(1) + 'K' : String(v||0);
+
+function toast(msg, type='ok') {
+  const t = $('toast'); t.textContent = msg; t.className = `toast show ${type}`;
+  setTimeout(() => t.className = 'toast', 3500);
+}
+
+// ═══════════════════════════════════════════════════════
+// AUTH — ZERODHA KITE
+// ═══════════════════════════════════════════════════════
+function loadSavedCredentials() {
+  APP.kite.api_key = localStorage.getItem('khabar_api_key') || '';
+  APP.kite.api_secret = localStorage.getItem('khabar_api_secret') || '';
+  APP.kite.access_token = localStorage.getItem('khabar_access_token') || '';
+  if ($('inp-api-key')) $('inp-api-key').value = APP.kite.api_key;
+}
+
+function saveAndLogin() {
+  const key = $('inp-api-key').value.trim();
+  const secret = $('inp-api-secret').value.trim();
+  if (!key || !secret) { toast('API Key aur Secret dono daalo', 'err'); return; }
+  localStorage.setItem('khabar_api_key', key);
+  localStorage.setItem('khabar_api_secret', secret);
+  APP.kite.api_key = key;
+  APP.kite.api_secret = secret;
+  redirectToKiteLogin();
+}
+
+function redirectToKiteLogin() {
+  const key = APP.kite.api_key || localStorage.getItem('khabar_api_key');
+  if (!key) { toast('Pehle API Key enter karo', 'err'); return; }
+  window.location.href = `https://kite.zerodha.com/connect/login?api_key=${key}&v=3`;
+}
+
+function manualTokenLogin() {
+  const token = $('inp-manual-token').value.trim();
+  if (!token) { toast('Token paste karo', 'err'); return; }
+  const key = $('inp-api-key').value.trim();
+  if (key) { localStorage.setItem('khabar_api_key', key); APP.kite.api_key = key; }
+  const secret = $('inp-api-secret').value.trim();
+  if (secret) { localStorage.setItem('khabar_api_secret', secret); APP.kite.api_secret = secret; }
+  localStorage.setItem('khabar_access_token', token);
+  APP.kite.access_token = token;
+  activateKite();
+}
+
+async function handleCallback() {
+  const params = new URLSearchParams(window.location.search);
+  const reqToken = params.get('request_token');
+  if (!reqToken) return false;
+
+  toast('Exchanging token with Zerodha...', 'info');
+  const key = APP.kite.api_key || localStorage.getItem('khabar_api_key') || '';
+  const secret = APP.kite.api_secret || localStorage.getItem('khabar_api_secret') || '';
+
+  if (!key || !secret) { toast('API Key/Secret missing — paste token manually', 'err'); return false; }
+
+  try {
+    const r = await fetch(KITE_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'exchange', api_key: key, api_secret: secret, request_token: reqToken })
+    });
+    const data = await r.json();
+    if (data.access_token) {
+      localStorage.setItem('khabar_access_token', data.access_token);
+      APP.kite.access_token = data.access_token;
+      window.history.replaceState({}, document.title, window.location.pathname);
+      toast('Zerodha authenticated ✓');
+      return true;
+    } else {
+      toast('Token exchange failed: ' + (data.error || 'Unknown'), 'err');
+      return false;
+    }
+  } catch(e) {
+    toast('Exchange error: ' + e.message, 'err');
+    return false;
+  }
+}
+
+function activateKite() {
+  APP.kite.active = true;
+  $('login-screen').classList.add('hidden');
+  $('relogin-bar').classList.add('hidden');
+  $('conn-dot').className = 'dot dg';
+  $('conn-txt').textContent = 'KITE LIVE';
+  toast('Welcome! Zerodha connected ✓');
+  initDashboard();
+}
+
+function onKiteExpired() {
+  APP.kite.active = false;
+  APP.kite.access_token = '';
+  localStorage.removeItem('khabar_access_token');
+  $('relogin-bar').classList.remove('hidden');
+  $('conn-dot').className = 'dot dr';
+  $('conn-txt').textContent = 'TOKEN EXPIRED';
+  toast('Token expired — click Re-Login. Option chain still works!', 'err');
+}
+
+function logout() {
+  localStorage.removeItem('khabar_access_token');
+  APP.kite.access_token = '';
+  APP.kite.active = false;
+  $('login-screen').classList.remove('hidden');
+}
+
+// ═══════════════════════════════════════════════════════
+// API LAYER — HYBRID (Kite for quotes, NSE for OC)
+// ═══════════════════════════════════════════════════════
+async function nseApi(action, params = {}) {
+  try {
+    const r = await fetch(NSE_API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, ...params }) });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return await r.json();
+  } catch(e) {
+    console.error(`NSE ${action}:`, e);
+    return null;
+  }
+}
+
+async function kiteApi(action, params = {}) {
+  if (!APP.kite.active || !APP.kite.access_token || !APP.kite.api_key) return null;
+  try {
+    const r = await fetch(KITE_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, api_key: APP.kite.api_key, access_token: APP.kite.access_token, ...params })
+    });
+    if (r.status === 401) { onKiteExpired(); return null; }
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data = await r.json();
+    if (data?.expired || data?._tokenExpired) { onKiteExpired(); return null; }
+    if (!APP.connected) { APP.connected = true; $('conn-dot').className = 'dot dg'; $('conn-txt').textContent = 'KITE LIVE'; }
+    return data;
+  } catch(e) {
+    console.error(`KITE ${action}:`, e);
+    return null;
+  }
+}
+
+// Smart API: Use Kite when available, NSE as fallback
+async function api(action, params = {}) {
+  // Option chain ALWAYS from NSE (better data)
+  if (action === 'option-chain' || action === 'indices' || action === 'index-stocks' || action === 'search' || action === 'market-status') {
+    const data = await nseApi(action, params);
+    if (data && !APP.connected) { APP.connected = true; $('conn-dot').className = 'dot dg'; }
+    return data;
+  }
+  // Quotes: prefer Kite, fallback to NSE
+  if (action === 'quote') {
+    const kData = await kiteApi('quote', params);
+    if (kData?.data) return kData;
+    return await nseApi('quote', params);
+  }
+  // History: prefer Kite, fallback to Yahoo via NSE proxy
+  if (action === 'history') {
+    // For Kite history we need instrument_token, so use NSE proxy (Yahoo Finance) as default
+    // Unless we have instrument_token
+    if (params.instrument_token) {
+      const kData = await kiteApi('history', params);
+      if (kData?.data?.candles) return kData;
+    }
+    return await nseApi('history', params);
+  }
+  // Everything else through NSE
+  return await nseApi(action, params);
+}
+
+async function fetchNews() {
+  try { const r = await fetch(NEWS_API); if (!r.ok) return []; return await r.json(); } catch(e) { return []; }
+}
+
+// ═══════════════════════════════════════════════════════
+// INDICES TICKER
+// ═══════════════════════════════════════════════════════
+const IDX_MAP = {
+  'NIFTY 50': ['t-n50','t-n50b'], 'NIFTY BANK': ['t-bnf','t-bnfb'], 'NIFTY FINANCIAL SERVICES': ['t-fin','t-finb'],
+  'NIFTY IT': ['t-nit','t-nitb'], 'NIFTY MIDSMALLCAP 400': ['t-mid','t-midb'], 'NIFTY AUTO': ['t-auto'],
+  'NIFTY PHARMA': ['t-pharma'], 'S&P BSE SENSEX': ['t-sensex','t-sensexb'], 'NIFTY MIDCAP 100': ['t-mid','t-midb']
+};
+
+async function refreshIndices() {
+  // Try Kite first for real-time indices, then NSE fallback
+  if (APP.kite.active) {
+    const kData = await kiteApi('indices');
+    if (kData?.data) {
+      const d = kData.data;
+      const KITE_IDX = {
+        'NSE:NIFTY 50': ['t-n50','t-n50b'], 'NSE:NIFTY BANK': ['t-bnf','t-bnfb'],
+        'NSE:NIFTY FIN SERVICE': ['t-fin','t-finb'], 'NSE:NIFTY IT': ['t-nit','t-nitb'],
+        'NSE:NIFTY MIDCAP 100': ['t-mid','t-midb'], 'BSE:SENSEX': ['t-sensex','t-sensexb']
+      };
+      for (const [sym, ids] of Object.entries(KITE_IDX)) {
+        const q = d[sym]; if (!q) continue;
+        const ltp = q.last_price, chg = q.net_change || ((ltp - (q.ohlc?.close||ltp)) / (q.ohlc?.close||ltp) * 100);
+        const up = chg >= 0;
+        const txt = `${ltp.toLocaleString('en-IN',{maximumFractionDigits:1})} ${up?'▲':'▼'}${Math.abs(chg).toFixed(2)}%`;
+        ids.forEach(id => { const el = $(id); if(el) { el.textContent = txt; el.style.color = up ? 'var(--g)' : 'var(--r)'; } });
+      }
+    }
+  }
+
+  // Always fetch NSE for sector heatmap + comprehensive index data
+  const data = await nseApi('indices');
+  if (!data?.data) return;
+  APP.indices = {};
+  data.data.forEach(idx => {
+    APP.indices[idx.index] = idx;
+    const ids = IDX_MAP[idx.index];
+    if (ids && !APP.kite.active) {
+      const up = parseFloat(idx.percentChange) >= 0;
+      const txt = `${Number(idx.last).toLocaleString('en-IN',{maximumFractionDigits:1})} ${up?'▲':'▼'}${Math.abs(parseFloat(idx.percentChange||0)).toFixed(2)}%`;
+      ids.forEach(id => { const el = $(id); if(el) { el.textContent = txt; el.style.color = up ? 'var(--g)' : 'var(--r)'; } });
+    }
+  });
+  updateSectorHeatmap(data.data);
+}
+
+// ═══════════════════════════════════════════════════════
+// SECTOR HEATMAP
+// ═══════════════════════════════════════════════════════
+const SECTORS = ['NIFTY BANK','NIFTY IT','NIFTY PHARMA','NIFTY AUTO','NIFTY FMCG','NIFTY METAL','NIFTY REALTY','NIFTY ENERGY','NIFTY MEDIA','NIFTY PSU BANK','NIFTY FINANCIAL SERVICES','NIFTY MIDCAP 100'];
+
+function updateSectorHeatmap(allIdx) {
+  const el = $('sector-heatmap');
+  if (!allIdx) return;
+  let html = '';
+  SECTORS.forEach(s => {
+    const idx = allIdx.find(x => x.index === s);
+    if (!idx) return;
+    const pct = parseFloat(idx.percentChange || 0);
+    const bg = pct > 1 ? 'rgba(0,230,118,.25)' : pct > 0 ? 'rgba(0,230,118,.12)' : pct > -1 ? 'rgba(255,51,85,.12)' : 'rgba(255,51,85,.25)';
+    const color = pct >= 0 ? 'var(--g)' : 'var(--r)';
+    const name = s.replace('NIFTY ','').replace('NIFTY','');
+    html += `<div class="sheat" style="background:${bg};color:${color}">${name}<br>${pct > 0 ? '+' : ''}${pct.toFixed(2)}%</div>`;
+  });
+  el.innerHTML = html;
+  $('sect-time').textContent = new Date().toLocaleTimeString('en-IN', { hour12: false });
+}
+
+// ═══════════════════════════════════════════════════════
+// NEWS
+// ═══════════════════════════════════════════════════════
+async function refreshNews() {
+  const news = await fetchNews();
+  if (!news.length) return;
+  // Check for new breaking news
+  if (news[0] && news[0].highImpact && news[0].title !== APP.lastNewsTitle) {
+    APP.lastNewsTitle = news[0].title;
+    showNewsPopup(news[0]);
+  }
+  APP.news = news;
+  renderNewsFeed(news);
+}
+
+function renderNewsFeed(news) {
+  const el = $('news-feed');
+  el.innerHTML = news.slice(0, 25).map(n => {
+    const time = new Date(n.time);
+    const ago = Math.round((Date.now() - time) / 60000);
+    const agoStr = ago < 60 ? `${ago}m ago` : `${Math.round(ago/60)}h ago`;
+    return `<div class="news-item ${n.highImpact ? 'news-hi' : ''}">
+      <span class="news-src">${n.source}</span>
+      <span style="font-size:9px;color:var(--m)">${agoStr}</span>
+      ${n.highImpact ? '<span style="color:var(--r);font-size:9px"> 🔴 HIGH IMPACT</span>' : ''}
+      <div style="margin-top:3px;font-size:11px;${n.highImpact ? 'font-weight:700;color:var(--t)' : 'color:var(--m)'}">${n.title}</div>
+    </div>`;
+  }).join('');
+  $('news-count').textContent = `${news.length} ITEMS`;
+}
+
+function showNewsPopup(item) {
+  $('np-title').textContent = item.title;
+  $('np-desc').textContent = item.desc || item.source;
+  $('news-popup').classList.add('show');
+  setTimeout(() => $('news-popup').classList.remove('show'), 8000);
+}
+function closeNewsPopup() { $('news-popup').classList.remove('show'); }
+
+// ═══════════════════════════════════════════════════════
+// BANKING OI
+// ═══════════════════════════════════════════════════════
+async function refreshBankOI() {
+  const data = await api('index-stocks', { index: 'NIFTY BANK' });
+  if (!data?.data) return;
+  APP.bankData = data.data;
+  const el = $('bank-oi-panel');
+  el.innerHTML = `<table class="tbl"><tr><th>Stock</th><th>LTP</th><th>Change%</th><th>Volume</th><th>52W H/L</th></tr>` +
+    data.data.map(s => {
+      const up = parseFloat(s.pChange) >= 0;
+      return `<tr>
+        <td style="font-weight:700;color:var(--a);cursor:pointer" onclick="quickLoad('${s.symbol}')">${s.symbol}</td>
+        <td>${fmt(s.lastPrice)}</td>
+        <td class="${up?'up':'dn'}">${up?'+':''}${parseFloat(s.pChange).toFixed(2)}%</td>
+        <td style="color:var(--m)">${fmtL(s.totalTradedVolume)}</td>
+        <td style="color:var(--m);font-size:9px">${fmt(s.yearHigh)} / ${fmt(s.yearLow)}</td>
+      </tr>`;
+    }).join('') + '</table>';
+}
+
+// ═══════════════════════════════════════════════════════
+// STOCK SEARCH
+// ═══════════════════════════════════════════════════════
+let searchTimer = null;
+async function onSearch(v) {
+  clearTimeout(searchTimer);
+  const q = v.trim();
+  if (q.length < 2) { $('ac-list').style.display = 'none'; return; }
+  searchTimer = setTimeout(async () => {
+    const data = await api('search', { query: q });
+    if (!data) return;
+    // NSE search returns array or object with suggestions
+    let items = [];
+    if (Array.isArray(data)) items = data;
+    else if (data.symbols) items = data.symbols;
+    else if (data.data) items = Array.isArray(data.data) ? data.data : [];
+    if (!items.length) { $('ac-list').style.display = 'none'; return; }
+    APP.acList = items.slice(0, 10);
+    const el = $('ac-list');
+    el.style.display = 'block';
+    el.innerHTML = APP.acList.map((x, i) => {
+      const sym = x.symbol || x.symbol_info || x.tradingsymbol || '';
+      const name = x.company_name || x.name || '';
+      return `<div class="ac-item" onclick="selectAC(${i})"><div><span class="ac-sym">${sym}</span><div style="font-size:9px;color:var(--m)">${name}</div></div></div>`;
+    }).join('');
+  }, 200);
+}
+
+function selectAC(i) {
+  const x = APP.acList[i];
+  const sym = x.symbol || x.symbol_info || x.tradingsymbol || '';
+  $('search-input').value = sym;
+  $('ac-list').style.display = 'none';
+  analyzeStock();
+}
+
+function onSearchKey(e) {
+  if (e.key === 'Enter') { $('ac-list').style.display = 'none'; analyzeStock(); }
+  if (e.key === 'Escape') $('ac-list').style.display = 'none';
+}
+
+function quickLoad(sym) { $('search-input').value = sym; analyzeStock(); }
+document.addEventListener('click', e => { if (!e.target.closest('.ac-wrap')) $('ac-list').style.display = 'none'; });
+
+// ═══════════════════════════════════════════════════════
+// ANALYZE STOCK
+// ═══════════════════════════════════════════════════════
+async function analyzeStock() {
+  const sym = $('search-input').value.trim().toUpperCase();
+  if (!sym) { toast('Enter a stock symbol', 'err'); return; }
+  APP.symbol = sym;
+  $('stock-hdr').style.display = 'block';
+  $('sh-price').innerHTML = '<span class="spin"></span>';
+  toast(`Loading ${sym}...`, 'info');
+
+  // Fetch quote + history in parallel
+  // Try Kite for quote (real-time), NSE + Yahoo for history
+  const kiteQuotePromise = APP.kite.active
+    ? kiteApi('quote', { instruments: `NSE:${sym}` })
+    : Promise.resolve(null);
+  const nseQuotePromise = nseApi('quote', { symbol: sym });
+  const histPromise = nseApi('history', { symbol: sym, range: APP.chartRange, interval: APP.chartInterval });
+
+  const [kiteQuote, nseQuote, histData] = await Promise.all([kiteQuotePromise, nseQuotePromise, histPromise]);
+
+  // Process quote — prefer Kite (real-time) over NSE
+  let price = 0, chg = 0, pChg = 0;
+  const quoteData = nseQuote; // NSE has richer data structure
+
+  if (kiteQuote?.data?.[`NSE:${sym}`]) {
+    const kq = kiteQuote.data[`NSE:${sym}`];
+    price = kq.last_price;
+    chg = kq.net_change || (price - (kq.ohlc?.close || price));
+    pChg = kq.ohlc?.close ? ((price - kq.ohlc.close) / kq.ohlc.close * 100) : 0;
+  }
+
+  if (!price && nseQuote?.priceInfo) {
+    const pi = nseQuote.priceInfo;
+    price = pi.lastPrice || pi.close || 0;
+    chg = pi.change || 0;
+    pChg = pi.pChange || 0;
+  }
+  APP.quote = quoteData;
+
+  // Process history
+  let candles = [];
+  if (histData?.chart?.result?.[0]) {
+    const r = histData.chart.result[0];
+    const ts = r.timestamp || [];
+    const q = r.indicators?.quote?.[0] || {};
+    candles = ts.map((t, i) => ({
+      time: t, open: q.open?.[i], high: q.high?.[i], low: q.low?.[i], close: q.close?.[i], volume: q.volume?.[i]
+    })).filter(c => c.close != null && c.open != null);
+  }
+  APP.history = candles;
+
+  if (!price && candles.length) price = candles[candles.length-1].close;
+  if (!price) { toast(`${sym}: No data found`, 'err'); $('sh-price').textContent = 'NO DATA'; return; }
+
+  // Run TA on 1Y daily data for indicators (fetch separately if current range is intraday)
+  let taCandles = candles;
+  if (APP.chartInterval !== '1d' && APP.chartInterval !== '1wk') {
+    const dailyData = await api('history', { symbol: sym, range: '1y', interval: '1d' });
+    if (dailyData?.chart?.result?.[0]) {
+      const r = dailyData.chart.result[0];
+      const ts = r.timestamp || [];
+      const q = r.indicators?.quote?.[0] || {};
+      taCandles = ts.map((t, i) => ({ time: t, open: q.open?.[i], high: q.high?.[i], low: q.low?.[i], close: q.close?.[i], volume: q.volume?.[i] })).filter(c => c.close != null);
+    }
+  }
+
+  // Technical Analysis
+  const analysis = computeTA(taCandles, price);
+  APP.analysis = analysis;
+
+  // Update UI
+  updateStockHeader(sym, price, chg, pChg, quoteData);
+  updateSignalBanner(analysis);
+  updateChart(candles, analysis);
+  updateAIAnalysis(analysis, sym);
+  updateSignalsList(analysis);
+  updateIndicatorsTable(analysis);
+  updateFibTable(analysis);
+  toast(`${sym} loaded ✓`);
+}
+
+function setChartRange(range, interval) {
+  APP.chartRange = range;
+  APP.chartInterval = interval;
+  document.querySelectorAll('#chart-btns .nav-btn').forEach(b => b.classList.remove('on'));
+  event.target.classList.add('on');
+  if (APP.symbol) analyzeStock();
+}
+
+// ═══════════════════════════════════════════════════════
+// TECHNICAL ANALYSIS ENGINE
+// ═══════════════════════════════════════════════════════
+function computeTA(candles, livePrice) {
+  if (candles.length < 5) return null;
+  const C = candles.map(c => c.close), H = candles.map(c => c.high), L = candles.map(c => c.low), V = candles.map(c => c.volume || 0);
+  const n = C.length, price = livePrice || C[n-1];
+
+  const sma = (a, p) => { const s = a.slice(-Math.min(p, a.length)); return s.reduce((x,y) => x+y, 0) / s.length; };
+  const ema = (a, p) => { const k = 2/(p+1); let e = a[0]; for(let i = 1; i < a.length; i++) e = a[i]*k + e*(1-k); return e; };
+
+  const sma5=sma(C,5), sma10=sma(C,10), sma20=sma(C,20), sma50=sma(C,50), sma100=sma(C,100), sma200=sma(C,200);
+  const ema9=ema(C,9), ema21=ema(C,21), ema12=ema(C,12), ema26=ema(C,26);
+  const macd = ema12 - ema26, macdSig = macd * 0.85, macdHist = macd - macdSig;
+
+  let gains = 0, losses = 0;
+  for (let i = Math.max(1, n-14); i < n; i++) { const d = C[i]-C[i-1]; d > 0 ? gains += d : losses -= d; }
+  const avgLoss = losses/14, rsi = avgLoss === 0 ? 100 : 100 - (100 / (1 + (gains/14)/avgLoss));
+
+  const bbMean = sma20, bbStd = Math.sqrt(C.slice(-20).reduce((a,b) => a + (b-bbMean)**2, 0) / Math.min(20, C.length));
+  const bbU = bbMean + 2*bbStd, bbL = bbMean - 2*bbStd, bbW = ((bbU-bbL)/bbMean)*100;
+
+  let atrS = 0;
+  for (let i = Math.max(1, n-14); i < n; i++) { atrS += Math.max(H[i]-L[i], Math.abs(H[i]-C[i-1]), Math.abs(L[i]-C[i-1])); }
+  const atr = atrS / Math.min(14, n-1);
+
+  const h14 = Math.max(...H.slice(-14)), l14 = Math.min(...L.slice(-14));
+  const stochK = h14 === l14 ? 50 : ((price - l14) / (h14 - l14)) * 100;
+  const williamsR = h14 === l14 ? -50 : -((h14 - price) / (h14 - l14)) * 100;
+
+  const avgVol = V.slice(-20).reduce((a,b) => a+b, 0) / Math.min(20, V.length);
+  const todVol = V[n-1], volRatio = avgVol > 0 ? todVol / avgVol : 1;
+
+  const h52 = Math.max(...H), l52 = Math.min(...L), range52 = h52 - l52;
+  const fibs = { '0%': h52, '23.6%': h52-range52*.236, '38.2%': h52-range52*.382, '50%': h52-range52*.5, '61.8%': h52-range52*.618, '78.6%': h52-range52*.786, '100%': l52 };
+
+  const piv = (H[n-1]+L[n-1]+C[n-1])/3;
+  const r1 = 2*piv-L[n-1], r2 = piv+(H[n-1]-L[n-1]), s1 = 2*piv-H[n-1], s2 = piv-(H[n-1]-L[n-1]);
+
+  // Scoring
+  let bull = 0, bear = 0;
+  if (rsi < 40) bull += 2; else if (rsi > 65) bear += 2; else if (rsi > 50) bull++;
+  macd > 0 ? bull++ : bear++; macdHist > 0 ? bull++ : bear++;
+  price > sma20 ? bull++ : bear++; price > sma50 ? bull++ : bear++; sma20 > sma50 ? bull++ : bear++; sma5 > sma20 ? bull++ : bear++;
+  if (price > bbL && price < bbMean) bull++; if (price > bbU) bear++;
+  stochK < 25 ? bull += 2 : stochK > 75 ? bear += 2 : 0;
+  williamsR < -80 ? bull++ : williamsR > -20 ? bear++ : 0;
+  volRatio > 1.5 && price > C[n-2] ? bull += 2 : volRatio > 1.5 ? bear += 2 : 0;
+
+  const total = bull + bear, bullPct = total > 0 ? (bull/total)*100 : 50;
+  const signal = bullPct >= 62 ? 'BUY' : bullPct <= 38 ? 'SELL' : 'HOLD';
+  const confidence = Math.round(50 + Math.abs(bullPct - 50));
+  const sl = +(price - atr*2).toFixed(2), target1 = +(price + atr*3).toFixed(2);
+  const target7d = +(price + atr*1.5).toFixed(2), target3m = +(price + atr*7).toFixed(2);
+  const rr = ((target1 - price) / Math.max(0.01, price - sl)).toFixed(2);
+  const support = Math.min(s1, fibs['61.8%'], sma50);
+  const resistance = Math.max(r1, fibs['38.2%']);
+  const trend = sma5 > sma20 && sma20 > sma50 ? 'UPTREND' : sma5 < sma20 && sma20 < sma50 ? 'DOWNTREND' : 'SIDEWAYS';
+  const m10 = C[n-1] - C[Math.max(0,n-11)], m20c = C[n-1] - C[Math.max(0,n-21)];
+  const momentum = m10 > 0 && m20c > 0 ? 'STRONG BULL' : m10 < 0 && m20c < 0 ? 'STRONG BEAR' : m10 > 0 ? 'MIXED BULL' : 'MIXED BEAR';
+
+  return { price, signal, confidence, bull, bear, bullPct, sma5, sma10, sma20, sma50, sma100, sma200, ema9, ema21, rsi, macd, macdSig, macdHist, bbU, bbL, bbW, bbMean, atr, stochK, williamsR, avgVol, todVol, volRatio, h52, l52, fibs, piv, r1, r2, s1, s2, sl, target1, target7d, target3m, rr, support, resistance, trend, momentum, n };
+}
+
+// ═══════════════════════════════════════════════════════
+// UI — STOCK HEADER
+// ═══════════════════════════════════════════════════════
+function updateStockHeader(sym, price, chg, pChg, q) {
+  const up = chg >= 0;
+  $('sh-name').textContent = sym + (q?.info?.companyName ? ` · ${q.info.companyName}` : '');
+  $('sh-price').textContent = fmt(price);
+  $('sh-price').style.color = up ? 'var(--g)' : 'var(--r)';
+  $('sh-chg').textContent = `${up?'+':''}${chg.toFixed(2)} (${up?'+':''}${pChg.toFixed(2)}%)`;
+  $('sh-chg').style.background = up ? 'rgba(0,230,118,.15)' : 'rgba(255,51,85,.15)';
+  $('sh-chg').style.color = up ? 'var(--g)' : 'var(--r)';
+
+  const a = APP.analysis;
+  if (!a) return;
+  const meta = [];
+  if (q?.priceInfo) { const p = q.priceInfo; meta.push(`O: ${fmt(p.open||0)} H: ${fmt(p.intraDayHighLow?.max||0)} L: ${fmt(p.intraDayHighLow?.min||0)}`); }
+  if (q?.securityInfo?.tradedVolume) meta.push(`Vol: ${fmtL(q.securityInfo.tradedVolume)}`);
+  $('sh-meta').innerHTML = meta.join('<br>');
+
+  $('sh-cards').innerHTML = [
+    ['Target 7D', fmt(a.target7d), `+${((a.target7d/a.price-1)*100).toFixed(1)}%`, 'var(--g)'],
+    ['Target 1M', fmt(a.target1), `+${((a.target1/a.price-1)*100).toFixed(1)}%`, 'var(--g)'],
+    ['Target 3M', fmt(a.target3m), `+${((a.target3m/a.price-1)*100).toFixed(1)}%`, 'var(--a)'],
+    ['Stop Loss', fmt(a.sl), `-${((1-a.sl/a.price)*100).toFixed(1)}%`, 'var(--r)'],
+    ['Support', fmt(a.support), 'Fib 61.8%', 'var(--g)'],
+    ['Resistance', fmt(a.resistance), 'Fib 38.2%', 'var(--y)'],
+  ].map(([l,v,sub,c]) => `<div class="shc"><div class="shc-l">${l}</div><div class="shc-v" style="color:${c}">${v}</div><div style="font-size:9px;color:var(--m);margin-top:2px">${sub}</div></div>`).join('');
+}
+
+function updateSignalBanner(a) {
+  if (!a) return;
+  const el = $('sig-banner');
+  el.style.display = 'block';
+  el.className = `sig-banner ${a.signal.toLowerCase()}`;
+  $('sig-main').textContent = a.signal;
+  $('sig-main').style.color = a.signal==='BUY' ? 'var(--g)' : a.signal==='SELL' ? 'var(--r)' : 'var(--y)';
+  $('sig-sub').textContent = `${a.confidence}% confidence · ${a.bull}B/${a.bear}S · ${a.trend} · R:R ${a.rr}:1`;
+
+  $('sig-badges').innerHTML = [
+    [`RSI ${a.rsi.toFixed(0)}`, a.rsi<40?'bg':a.rsi>65?'br':'by'],
+    [`MACD ${a.macd>0?'▲':'▼'}`, a.macd>0?'bg':'br'],
+    [`VOL ${a.volRatio>1.3?'HIGH':'NRM'}`, a.volRatio>1.3?'ba':'by'],
+    [a.trend, a.trend==='UPTREND'?'bg':a.trend==='DOWNTREND'?'br':'by'],
+    [a.momentum, a.momentum.includes('BULL')?'bg':'br'],
+  ].map(([t,c]) => `<span class="badge ${c}">${t}</span>`).join('');
+
+  $('sig-levels').innerHTML = [
+    ['BUY ZONE', fmt(a.bbL), 'up'], ['SELL ZONE', fmt(a.bbU), 'dn'], ['ATR', `₹${a.atr.toFixed(1)}`, 'neu'],
+    ['52W', `${fmt(a.h52)} / ${fmt(a.l52)}`, ''], ['SMA 200', fmt(a.sma200), a.price>a.sma200?'up':'dn'],
+  ].map(([l,v,c]) => `<span><span style="color:var(--m)">${l}: </span><b class="${c}">${v}</b></span>`).join('');
+}
+
+// ═══════════════════════════════════════════════════════
+// AI ANALYSIS TEXT
+// ═══════════════════════════════════════════════════════
+function updateAIAnalysis(a, sym) {
+  if (!a) return;
+  let t = `<b style="color:var(--a)">${sym}</b> at <b>${fmt(a.price)}</b> is in a <b>${a.trend}</b> `;
+  t += a.price > a.sma200 ? 'trading above 200-SMA (bullish structure). ' : 'trading below 200-SMA (bearish structure). ';
+
+  if (a.rsi < 30) t += `<br>RSI at <span class="up"><b>${a.rsi.toFixed(0)}</b> — HEAVILY OVERSOLD</span>. High probability bounce zone. `;
+  else if (a.rsi < 40) t += `<br>RSI at <span class="up"><b>${a.rsi.toFixed(0)}</b> — oversold</span>. Watch for reversal. `;
+  else if (a.rsi > 70) t += `<br>RSI at <span class="dn"><b>${a.rsi.toFixed(0)}</b> — OVERBOUGHT</span>. Pullback risk high. `;
+  else if (a.rsi > 60) t += `<br>RSI at <b>${a.rsi.toFixed(0)}</b> — healthy bullish momentum. `;
+  else t += `<br>RSI at <b>${a.rsi.toFixed(0)}</b> — neutral zone. `;
+
+  t += a.macd > 0 ? `MACD <span class="up">bullish</span>${a.macdHist>0?' & expanding':' but fading'}. ` : `MACD <span class="dn">bearish</span>. `;
+
+  if (a.volRatio > 2) t += `Volume <b>${a.volRatio.toFixed(1)}x</b> above avg — institutional activity likely. `;
+  else if (a.volRatio > 1.3) t += `Above-avg volume confirms move. `;
+  else if (a.volRatio < 0.5) t += `Low volume — weak conviction. `;
+
+  t += `<br><br><b style="font-size:12px">VERDICT: `;
+  if (a.signal === 'BUY') t += `<span class="up">✅ BUY</span></b> (${a.confidence}% conf) — Entry ~${fmt(a.price)}, Target ${fmt(a.target1)}, SL ${fmt(a.sl)}`;
+  else if (a.signal === 'SELL') t += `<span class="dn">🔴 SELL/AVOID</span></b> (${a.confidence}% conf) — SL ${fmt(a.sl)}, Support ${fmt(a.support)}`;
+  else t += `<span class="neu">⏸ HOLD/WAIT</span></b> (${a.confidence}% conf) — Wait for breakout above ${fmt(a.resistance)} or below ${fmt(a.support)}`;
+
+  $('ai-analysis').innerHTML = t;
+}
+
+function updateSignalsList(a) {
+  if (!a) return;
+  const sigs = [
+    { n:'RSI (14)', v:a.rsi.toFixed(1), t:a.rsi<35?'buy':a.rsi>65?'sell':'hold' },
+    { n:'MACD', v:a.macd.toFixed(3), t:a.macd>0?'buy':'sell' },
+    { n:'Bollinger', v:a.price<a.bbL?'Below':a.price>a.bbU?'Above':'Inside', t:a.price<a.bbL?'buy':a.price>a.bbU?'sell':'hold' },
+    { n:'Stochastic', v:a.stochK.toFixed(0), t:a.stochK<25?'buy':a.stochK>75?'sell':'hold' },
+    { n:'SMA 20/50', v:a.sma20>a.sma50?'Golden':'Death', t:a.sma20>a.sma50?'buy':'sell' },
+    { n:'Volume', v:a.volRatio.toFixed(1)+'x', t:a.volRatio>1.5&&a.price>a.sl?'buy':a.volRatio>1.5?'sell':'hold' },
+    { n:'Trend', v:a.trend, t:a.trend==='UPTREND'?'buy':a.trend==='DOWNTREND'?'sell':'hold' },
+    { n:'Momentum', v:a.momentum, t:a.momentum.includes('BULL')?'buy':'sell' },
+  ];
+  $('signals-list').innerHTML = sigs.map(s => `<div class="si ${s.t}"><b>${s.n}</b><span style="color:var(--m)">${s.v}</span></div>`).join('');
+}
+
+function updateIndicatorsTable(a) {
+  if (!a) return;
+  const rows = [
+    ['RSI (14)', a.rsi.toFixed(2), a.rsi<40?'<span class="up">OVERSOLD</span>':a.rsi>65?'<span class="dn">OVERBOUGHT</span>':'NEUTRAL'],
+    ['MACD', a.macd.toFixed(4), a.macd>0?'<span class="up">BULLISH</span>':'<span class="dn">BEARISH</span>'],
+    ['Stochastic K', a.stochK.toFixed(1), a.stochK<30?'<span class="up">OVERSOLD</span>':a.stochK>70?'<span class="dn">OVERBOUGHT</span>':'NEUTRAL'],
+    ['Williams %R', a.williamsR.toFixed(1), a.williamsR<-80?'<span class="up">OVERSOLD</span>':a.williamsR>-20?'<span class="dn">OVERBOUGHT</span>':'NEUTRAL'],
+    ['SMA 5', fmt(a.sma5), a.price>a.sma5?'<span class="up">Above</span>':'<span class="dn">Below</span>'],
+    ['SMA 20', fmt(a.sma20), a.price>a.sma20?'<span class="up">Above</span>':'<span class="dn">Below</span>'],
+    ['SMA 50', fmt(a.sma50), a.price>a.sma50?'<span class="up">Above</span>':'<span class="dn">Below</span>'],
+    ['SMA 200', fmt(a.sma200), a.price>a.sma200?'<span class="up">Above</span>':'<span class="dn">Below</span>'],
+    ['EMA 9', fmt(a.ema9), a.price>a.ema9?'<span class="up">Above</span>':'<span class="dn">Below</span>'],
+    ['EMA 21', fmt(a.ema21), a.price>a.ema21?'<span class="up">Above</span>':'<span class="dn">Below</span>'],
+    ['BB Upper', fmt(a.bbU), '<span class="dn">Resistance</span>'],
+    ['BB Lower', fmt(a.bbL), '<span class="up">Support</span>'],
+    ['BB Width', a.bbW.toFixed(1)+'%', a.bbW>5?'<span class="neu">Wide</span>':'<span class="up">Tight (Breakout?)</span>'],
+    ['ATR (14)', '₹'+a.atr.toFixed(2), 'Daily Range'],
+    ['Volume Ratio', a.volRatio.toFixed(2)+'x', a.volRatio>1.5?'<span class="up">HIGH</span>':'NORMAL'],
+  ];
+  $('ind-table').innerHTML = '<tr><th>Indicator</th><th>Value</th><th>Signal</th></tr>' +
+    rows.map(r => `<tr><td>${r[0]}</td><td style="color:var(--a)">${r[1]}</td><td>${r[2]}</td></tr>`).join('');
+}
+
+function updateFibTable(a) {
+  if (!a) return;
+  const p = a.price, nr = v => Math.abs(p-v) < a.atr ? '⚡ NEAR' : '—';
+  const rows = [
+    ['52W High', fmt(a.h52), 'Resistance', p>=a.h52*.98?'<span class="dn">AT HIGH</span>':'—'],
+    ['Fib 23.6%', fmt(a.fibs['23.6%']), 'Minor', nr(a.fibs['23.6%'])],
+    ['Fib 38.2%', fmt(a.fibs['38.2%']), '<b>Resistance</b>', nr(a.fibs['38.2%'])],
+    ['Fib 50%', fmt(a.fibs['50%']), '⚠ Reversal', nr(a.fibs['50%'])],
+    ['Fib 61.8%', fmt(a.fibs['61.8%']), '<b>Golden Support</b>', nr(a.fibs['61.8%'])],
+    ['52W Low', fmt(a.l52), 'Support', p<=a.l52*1.02?'<span class="up">AT LOW</span>':'—'],
+    ['Pivot', fmt(a.piv), 'Daily Pivot', nr(a.piv)],
+    ['R1 / R2', `${fmt(a.r1)} / ${fmt(a.r2)}`, 'Resistance', '—'],
+    ['S1 / S2', `${fmt(a.s1)} / ${fmt(a.s2)}`, 'Support', '—'],
+    ['🎯 Target', `<b class="up">${fmt(a.target1)}</b>`, 'ATR 3x', '<span class="up">EXIT ABOVE</span>'],
+    ['🛑 Stop Loss', `<b class="dn">${fmt(a.sl)}</b>`, 'ATR 2x', '<span class="dn">EXIT BELOW</span>'],
+  ];
+  $('fib-table').innerHTML = '<tr><th>Level</th><th>Price</th><th>Type</th><th>Status</th></tr>' +
+    rows.map(r => `<tr><td>${r[0]}</td><td style="color:var(--y)">${r[1]}</td><td style="color:var(--m);font-size:9px">${r[2]}</td><td>${r[3]}</td></tr>`).join('');
+}
+
+// ═══════════════════════════════════════════════════════
+// CHART (Lightweight Charts)
+// ═══════════════════════════════════════════════════════
+function updateChart(candles, analysis) {
+  const container = $('main-chart');
+  container.innerHTML = '';
+  if (!candles.length) return;
+
+  const chart = LightweightCharts.createChart(container, {
+    width: container.clientWidth, height: 340,
+    layout: { background: { color: '#0c1221' }, textColor: '#526580', fontSize: 10 },
+    grid: { vertLines: { color: '#1a274422' }, horzLines: { color: '#1a274422' } },
+    crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+    rightPriceScale: { borderColor: '#1a2744' },
+    timeScale: { borderColor: '#1a2744', timeVisible: true, secondsVisible: false },
+  });
+  APP.chart = chart;
+
+  // Candlestick
+  const candleSeries = chart.addCandlestickSeries({
+    upColor: '#00e676', downColor: '#ff3355', borderUpColor: '#00e676', borderDownColor: '#ff3355',
+    wickUpColor: '#00e676', wickDownColor: '#ff3355'
+  });
+
+  const isIntraday = APP.chartInterval !== '1d' && APP.chartInterval !== '1wk' && APP.chartInterval !== '1mo';
+  const candleData = candles.map(c => ({
+    time: isIntraday ? c.time : Math.floor(c.time / 86400) * 86400,
+    open: c.open, high: c.high, low: c.low, close: c.close
+  }));
+  // Deduplicate by time
+  const seen = new Set();
+  const uniqueCandles = candleData.filter(c => { if (seen.has(c.time)) return false; seen.add(c.time); return true; });
+  candleSeries.setData(uniqueCandles);
+  APP.candleSeries = candleSeries;
+
+  // Volume
+  const volSeries = chart.addHistogramSeries({
+    color: '#00ccff33', priceFormat: { type: 'volume' }, priceScaleId: 'vol',
+  });
+  chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } });
+  const volData = candles.map((c, i) => ({
+    time: isIntraday ? c.time : Math.floor(c.time / 86400) * 86400,
+    value: c.volume || 0,
+    color: c.close >= c.open ? 'rgba(0,230,118,.2)' : 'rgba(255,51,85,.2)'
+  }));
+  const seenV = new Set();
+  volSeries.setData(volData.filter(v => { if (seenV.has(v.time)) return false; seenV.add(v.time); return true; }));
+  APP.volSeries = volSeries;
+
+  // SMA overlays (only for daily+ charts)
+  if (!isIntraday && candles.length > 20) {
+    const sma20Data = [], sma50Data = [];
+    for (let i = 0; i < candles.length; i++) {
+      const t = Math.floor(candles[i].time / 86400) * 86400;
+      if (i >= 19) {
+        let sum = 0; for (let j = i-19; j <= i; j++) sum += candles[j].close;
+        sma20Data.push({ time: t, value: sum / 20 });
+      }
+      if (i >= 49) {
+        let sum = 0; for (let j = i-49; j <= i; j++) sum += candles[j].close;
+        sma50Data.push({ time: t, value: sum / 50 });
+      }
+    }
+    if (sma20Data.length) {
+      const s20 = chart.addLineSeries({ color: '#00ccff', lineWidth: 1, priceLineVisible: false, lastValueVisible: false });
+      s20.setData(sma20Data);
+    }
+    if (sma50Data.length) {
+      const s50 = chart.addLineSeries({ color: '#ff6b35', lineWidth: 1, priceLineVisible: false, lastValueVisible: false });
+      s50.setData(sma50Data);
+    }
+  }
+
+  // Price lines for targets/SL
+  if (analysis) {
+    candleSeries.createPriceLine({ price: analysis.target1, color: '#00e676', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'TGT' });
+    candleSeries.createPriceLine({ price: analysis.sl, color: '#ff3355', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'SL' });
+    candleSeries.createPriceLine({ price: analysis.support, color: '#ffc107', lineWidth: 1, lineStyle: 1, axisLabelVisible: true, title: 'SUP' });
+    candleSeries.createPriceLine({ price: analysis.resistance, color: '#b388ff', lineWidth: 1, lineStyle: 1, axisLabelVisible: true, title: 'RES' });
+  }
+
+  chart.timeScale().fitContent();
+  new ResizeObserver(() => { chart.applyOptions({ width: container.clientWidth }); }).observe(container);
+}
+
+// ═══════════════════════════════════════════════════════
+// F&O — OPTION CHAIN
+// ═══════════════════════════════════════════════════════
+async function loadFnO(index, btn) {
+  APP.fno.index = index;
+  document.querySelectorAll('#page-fno .nav-btn').forEach(b => b.classList.remove('on'));
+  if (btn) btn.classList.add('on');
+  toast(`Loading ${index} option chain...`, 'info');
+
+  const data = await api('option-chain', { symbol: index, type: 'indices' });
+  if (!data?.records?.data) { toast(`${index}: No option chain data`, 'err'); return; }
+  APP.fno.data = data;
+
+  // Set expiry dates
+  const sel = $('expiry-sel');
+  sel.innerHTML = (data.records.expiryDates || []).map((d, i) => `<option value="${d}" ${i===0?'selected':''}>${d}</option>`).join('');
+  APP.fno.expiry = data.records.expiryDates?.[0] || '';
+
+  processAndRenderOC(data);
+  toast(`${index} loaded ✓`);
+}
+
+function changeExpiry() {
+  APP.fno.expiry = $('expiry-sel').value;
+  if (APP.fno.data) processAndRenderOC(APP.fno.data);
+}
+
+function refreshFnO() { loadFnO(APP.fno.index, document.querySelector(`#fno-${APP.fno.index.toLowerCase().replace('nifty','nifty')}`)); }
+
+function processAndRenderOC(raw) {
+  const expiry = APP.fno.expiry;
+  const allData = raw.records.data.filter(r => r.expiryDate === expiry);
+  if (!allData.length) return;
+
+  const spot = allData[0]?.CE?.underlyingValue || allData[0]?.PE?.underlyingValue || 0;
+  const totCallOI = raw.filtered?.CE?.totOI || 0;
+  const totPutOI = raw.filtered?.PE?.totOI || 0;
+  const totCallVol = raw.filtered?.CE?.totVol || 0;
+  const totPutVol = raw.filtered?.PE?.totVol || 0;
+  const pcr = totCallOI > 0 ? (totPutOI / totCallOI).toFixed(2) : '—';
+
+  // Max Pain
+  const maxPain = calculateMaxPain(allData);
+
+  // Find ATM
+  const strikes = allData.map(r => r.strikePrice).sort((a,b) => a-b);
+  const atm = strikes.reduce((best, s) => Math.abs(s-spot) < Math.abs(best-spot) ? s : best, strikes[0]);
+
+  // Max OI / Max OI Change
+  let maxCallOI = { strike: 0, oi: 0 }, maxPutOI = { strike: 0, oi: 0 };
+  let maxCallChg = { strike: 0, chg: 0 }, maxPutChg = { strike: 0, chg: 0 };
+
+  allData.forEach(r => {
+    if (r.CE?.openInterest > maxCallOI.oi) maxCallOI = { strike: r.strikePrice, oi: r.CE.openInterest };
+    if (r.PE?.openInterest > maxPutOI.oi) maxPutOI = { strike: r.strikePrice, oi: r.PE.openInterest };
+    if (r.CE?.changeinOpenInterest > maxCallChg.chg) maxCallChg = { strike: r.strikePrice, chg: r.CE.changeinOpenInterest };
+    if (r.PE?.changeinOpenInterest > maxPutChg.chg) maxPutChg = { strike: r.strikePrice, chg: r.PE.changeinOpenInterest };
+  });
+
+  // Market signal
+  const pcrVal = parseFloat(pcr);
+  let signal = 'NEUTRAL', sigColor = 'var(--y)', sigDesc = 'No clear bias';
+  if (pcrVal > 1.3) { signal = '🟢 BULLISH'; sigColor = 'var(--g)'; sigDesc = 'High PCR — Put sellers supporting market'; }
+  else if (pcrVal > 1.0) { signal = '🟢 MILD BULL'; sigColor = 'var(--g)'; sigDesc = 'PCR favors bulls'; }
+  else if (pcrVal < 0.7) { signal = '🔴 BEARISH'; sigColor = 'var(--r)'; sigDesc = 'Low PCR — Call sellers dominating'; }
+  else if (pcrVal < 0.9) { signal = '🔴 MILD BEAR'; sigColor = 'var(--r)'; sigDesc = 'PCR slightly bearish'; }
+
+  if (spot > maxPain + 50) { sigDesc += ' · Spot above Max Pain (bullish bias)'; }
+  else if (spot < maxPain - 50) { sigDesc += ' · Spot below Max Pain (bearish pressure)'; }
+
+  // Update metrics
+  $('fno-spot').textContent = fmt(spot); $('fno-spot').style.color = 'var(--t)';
+  $('fno-pcr').textContent = pcr;
+  $('fno-pcr-st').textContent = pcrVal > 1 ? 'Bullish (>1)' : 'Bearish (<1)';
+  $('fno-pain').textContent = maxPain.toLocaleString('en-IN');
+  $('fno-signal').textContent = signal; $('fno-signal').style.color = sigColor;
+  $('fno-signal-desc').textContent = sigDesc;
+
+  $('fut-spot').textContent = fmt(spot);
+  $('fut-call-oi').textContent = fmtL(totCallOI);
+  $('fut-put-oi').textContent = fmtL(totPutOI);
+  $('fut-ratio').textContent = pcr;
+  $('fut-vol').textContent = fmtL(totCallVol + totPutVol);
+
+  $('max-call-oi-strike').textContent = maxCallOI.strike.toLocaleString('en-IN');
+  $('max-call-oi-val').textContent = `OI: ${fmtL(maxCallOI.oi)}`;
+  $('max-put-oi-strike').textContent = maxPutOI.strike.toLocaleString('en-IN');
+  $('max-put-oi-val').textContent = `OI: ${fmtL(maxPutOI.oi)}`;
+  $('max-call-chg-strike').textContent = maxCallChg.strike.toLocaleString('en-IN');
+  $('max-call-chg-val').textContent = `+${fmtL(maxCallChg.chg)} OI added`;
+  $('max-put-chg-strike').textContent = maxPutChg.strike.toLocaleString('en-IN');
+  $('max-put-chg-val').textContent = `+${fmtL(maxPutChg.chg)} OI added`;
+
+  // Render option chain table
+  renderOCTable(allData, atm, spot);
+
+  // Major buying/selling strikes
+  renderMajorStrikes(allData, spot);
+
+  // Auto suggestion
+  renderAutoSuggestion(allData, spot, pcr, maxPain, maxCallOI, maxPutOI, signal);
+
+  // Hidden OI
+  renderHiddenOI(allData, spot);
+
+  // Trend signal
+  renderTrendSignal(allData, spot, pcrVal, maxPain, maxCallOI, maxPutOI);
+}
+
+function calculateMaxPain(data) {
+  let minPain = Infinity, mpStrike = 0;
+  const strikes = data.filter(r => r.CE || r.PE);
+  strikes.forEach(target => {
+    let pain = 0;
+    strikes.forEach(s => {
+      if (target.strikePrice > s.strikePrice) pain += (s.CE?.openInterest || 0) * (target.strikePrice - s.strikePrice);
+      if (target.strikePrice < s.strikePrice) pain += (s.PE?.openInterest || 0) * (s.strikePrice - target.strikePrice);
+    });
+    if (pain < minPain) { minPain = pain; mpStrike = target.strikePrice; }
+  });
+  return mpStrike;
+}
+
+function renderOCTable(data, atm, spot) {
+  const maxOI = Math.max(...data.map(r => Math.max(r.CE?.openInterest||0, r.PE?.openInterest||0)), 1);
+  // Show strikes around ATM (±15 strikes)
+  const sorted = data.sort((a,b) => a.strikePrice - b.strikePrice);
+  const atmIdx = sorted.findIndex(r => r.strikePrice === atm);
+  const start = Math.max(0, atmIdx - 15);
+  const end = Math.min(sorted.length, atmIdx + 16);
+  const visible = sorted.slice(start, end);
+
+  $('oc-body').innerHTML = visible.map(r => {
+    const isATM = r.strikePrice === atm;
+    const ce = r.CE || {}, pe = r.PE || {};
+    const ceOIpct = ((ce.openInterest||0)/maxOI*100).toFixed(0);
+    const peOIpct = ((pe.openInterest||0)/maxOI*100).toFixed(0);
+    const itm_call = r.strikePrice < spot ? 'background:rgba(0,230,118,.03)' : '';
+    const itm_put = r.strikePrice > spot ? 'background:rgba(255,51,85,.03)' : '';
+    const ceChgColor = (ce.changeinOpenInterest||0) > 0 ? 'var(--g)' : (ce.changeinOpenInterest||0) < 0 ? 'var(--r)' : 'var(--m)';
+    const peChgColor = (pe.changeinOpenInterest||0) > 0 ? 'var(--r)' : (pe.changeinOpenInterest||0) < 0 ? 'var(--g)' : 'var(--m)';
+
+    return `<tr class="${isATM?'oc-atm':''}">
+      <td style="${itm_call}">${fmtL(ce.openInterest||0)}<div style="background:var(--g);height:3px;width:${ceOIpct}%;border-radius:2px;margin-top:2px"></div></td>
+      <td style="color:${ceChgColor};${itm_call}">${fmtL(ce.changeinOpenInterest||0)}</td>
+      <td style="${itm_call}">${fmtL(ce.totalTradedVolume||0)}</td>
+      <td style="color:var(--m);${itm_call}">${(ce.impliedVolatility||0).toFixed(1)}</td>
+      <td style="font-weight:700;${itm_call}">${(ce.lastPrice||0).toFixed(2)}</td>
+      <td style="font-weight:700;color:var(--y);font-size:11px">${r.strikePrice}</td>
+      <td style="font-weight:700;${itm_put}">${(pe.lastPrice||0).toFixed(2)}</td>
+      <td style="color:var(--m);${itm_put}">${(pe.impliedVolatility||0).toFixed(1)}</td>
+      <td style="${itm_put}">${fmtL(pe.totalTradedVolume||0)}</td>
+      <td style="color:${peChgColor};${itm_put}">${fmtL(pe.changeinOpenInterest||0)}</td>
+      <td style="${itm_put}">${fmtL(pe.openInterest||0)}<div style="background:var(--r);height:3px;width:${peOIpct}%;border-radius:2px;margin-top:2px;float:right"></div></td>
+    </tr>`;
+  }).join('');
+}
+
+function renderMajorStrikes(data, spot) {
+  // Buying: OI increase + price increase → long buildup
+  // Selling: OI increase + price decrease → short buildup
+  const callBuying = [], callSelling = [], putBuying = [], putSelling = [];
+
+  data.forEach(r => {
+    if (r.CE && r.CE.changeinOpenInterest > 0) {
+      if (r.CE.change > 0) callBuying.push({ strike: r.strikePrice, oi: r.CE.changeinOpenInterest, price: r.CE.lastPrice, chg: r.CE.change });
+      else callSelling.push({ strike: r.strikePrice, oi: r.CE.changeinOpenInterest, price: r.CE.lastPrice, chg: r.CE.change });
+    }
+    if (r.PE && r.PE.changeinOpenInterest > 0) {
+      if (r.PE.change > 0) putBuying.push({ strike: r.strikePrice, oi: r.PE.changeinOpenInterest, price: r.PE.lastPrice, chg: r.PE.change });
+      else putSelling.push({ strike: r.strikePrice, oi: r.PE.changeinOpenInterest, price: r.PE.lastPrice, chg: r.PE.change });
+    }
+  });
+
+  callBuying.sort((a,b) => b.oi - a.oi);
+  putBuying.sort((a,b) => b.oi - a.oi);
+  callSelling.sort((a,b) => b.oi - a.oi);
+  putSelling.sort((a,b) => b.oi - a.oi);
+
+  $('buying-panel').innerHTML = `
+    <div style="font-size:10px;color:var(--g);font-weight:700;margin-bottom:6px">🟢 CALL BUYING (Long Buildup) — BEARISH for Market</div>
+    ${callBuying.slice(0,5).map(s => `<div class="strike-item"><span>Strike <b>${s.strike}</b></span><span style="color:var(--g)">+${fmtL(s.oi)} OI</span><span>₹${s.price.toFixed(1)}</span></div>`).join('') || '<div style="color:var(--m);padding:8px">No significant call buying</div>'}
+    <div style="font-size:10px;color:var(--r);font-weight:700;margin:10px 0 6px">🔴 PUT BUYING (Long Buildup) — BULLISH for Market</div>
+    ${putBuying.slice(0,5).map(s => `<div class="strike-item"><span>Strike <b>${s.strike}</b></span><span style="color:var(--r)">+${fmtL(s.oi)} OI</span><span>₹${s.price.toFixed(1)}</span></div>`).join('') || '<div style="color:var(--m);padding:8px">No significant put buying</div>'}
+  `;
+
+  $('selling-panel').innerHTML = `
+    <div style="font-size:10px;color:var(--r);font-weight:700;margin-bottom:6px">🔴 CALL SELLING (Short Buildup) — RESISTANCE</div>
+    ${callSelling.slice(0,5).map(s => `<div class="strike-item"><span>Strike <b>${s.strike}</b></span><span style="color:var(--r)">+${fmtL(s.oi)} OI</span><span>₹${s.price.toFixed(1)}</span></div>`).join('') || '<div style="color:var(--m);padding:8px">No significant call selling</div>'}
+    <div style="font-size:10px;color:var(--g);font-weight:700;margin:10px 0 6px">🟢 PUT SELLING (Short Buildup) — SUPPORT</div>
+    ${putSelling.slice(0,5).map(s => `<div class="strike-item"><span>Strike <b>${s.strike}</b></span><span style="color:var(--g)">+${fmtL(s.oi)} OI</span><span>₹${s.price.toFixed(1)}</span></div>`).join('') || '<div style="color:var(--m);padding:8px">No significant put selling</div>'}
+  `;
+}
+
+function renderAutoSuggestion(data, spot, pcr, maxPain, maxCallOI, maxPutOI, signal) {
+  const pcrV = parseFloat(pcr);
+  const range = `${maxPutOI.strike} — ${maxCallOI.strike}`;
+  const bias = pcrV > 1.2 ? 'BULLISH' : pcrV < 0.8 ? 'BEARISH' : 'NEUTRAL';
+  const biasColor = bias === 'BULLISH' ? 'var(--g)' : bias === 'BEARISH' ? 'var(--r)' : 'var(--y)';
+
+  let suggestion = '';
+  if (bias === 'BULLISH') {
+    suggestion = `<div style="font-family:var(--f1);font-size:20px;font-weight:800;color:var(--g);margin-bottom:8px">BUY CALLS / SELL PUTS</div>`;
+    suggestion += `<div style="font-size:11px;line-height:1.8">
+      <b>LOGIC:</b> PCR ${pcr} (>1.2) indicates put writing support.<br>
+      <b>RANGE:</b> ${range}<br>
+      <b>MAX PAIN:</b> ${maxPain} — market may gravitate here.<br>
+      <b>ACTION:</b> Buy ${spot > maxPain ? 'at dips near ' + maxPutOI.strike : 'above ' + maxPain} with SL below ${maxPutOI.strike}.<br>
+      <b>TARGET:</b> ${maxCallOI.strike}
+    </div>`;
+  } else if (bias === 'BEARISH') {
+    suggestion = `<div style="font-family:var(--f1);font-size:20px;font-weight:800;color:var(--r);margin-bottom:8px">BUY PUTS / SELL CALLS</div>`;
+    suggestion += `<div style="font-size:11px;line-height:1.8">
+      <b>LOGIC:</b> PCR ${pcr} (<0.8) indicates call writing pressure.<br>
+      <b>RANGE:</b> ${range}<br>
+      <b>MAX PAIN:</b> ${maxPain}<br>
+      <b>ACTION:</b> Sell rallies near ${maxCallOI.strike} with SL above.<br>
+      <b>TARGET:</b> ${maxPutOI.strike}
+    </div>`;
+  } else {
+    suggestion = `<div style="font-family:var(--f1);font-size:20px;font-weight:800;color:var(--y);margin-bottom:8px">RANGE BOUND — SELL STRADDLE</div>`;
+    suggestion += `<div style="font-size:11px;line-height:1.8">
+      <b>LOGIC:</b> PCR ${pcr} is neutral — no clear direction.<br>
+      <b>RANGE:</b> ${range}<br>
+      <b>MAX PAIN:</b> ${maxPain}<br>
+      <b>ACTION:</b> Sell straddle/strangle at ATM. Book profits at range extremes.
+    </div>`;
+  }
+  $('auto-suggestion').innerHTML = suggestion;
+}
+
+function renderHiddenOI(data, spot) {
+  // Find unusual OI: strikes where changeinOI is > mean + 2*std
+  const ceChgs = data.filter(r => r.CE).map(r => r.CE.changeinOpenInterest || 0);
+  const peChgs = data.filter(r => r.PE).map(r => r.PE.changeinOpenInterest || 0);
+
+  const mean = arr => arr.reduce((a,b) => a+b, 0) / (arr.length || 1);
+  const std = (arr, m) => Math.sqrt(arr.reduce((a,b) => a + (b-m)**2, 0) / (arr.length || 1));
+
+  const ceMean = mean(ceChgs), ceStd = std(ceChgs, ceMean);
+  const peMean = mean(peChgs), peStd = std(peChgs, peMean);
+  const ceThresh = ceMean + 1.5 * ceStd;
+  const peThresh = peMean + 1.5 * peStd;
+
+  let hidden = [];
+  data.forEach(r => {
+    if (r.CE && (r.CE.changeinOpenInterest || 0) > ceThresh && r.CE.changeinOpenInterest > 0) {
+      const dir = r.CE.change < 0 ? 'CALL WRITING (Bearish)' : 'CALL BUYING (Bullish for calls)';
+      const color = r.CE.change < 0 ? 'var(--r)' : 'var(--g)';
+      hidden.push({ strike: r.strikePrice, type: 'CE', dir, oi: r.CE.changeinOpenInterest, color });
+    }
+    if (r.PE && (r.PE.changeinOpenInterest || 0) > peThresh && r.PE.changeinOpenInterest > 0) {
+      const dir = r.PE.change < 0 ? 'PUT WRITING (Bullish)' : 'PUT BUYING (Bearish)';
+      const color = r.PE.change < 0 ? 'var(--g)' : 'var(--r)';
+      hidden.push({ strike: r.strikePrice, type: 'PE', dir, oi: r.PE.changeinOpenInterest, color });
+    }
+  });
+
+  hidden.sort((a,b) => b.oi - a.oi);
+
+  if (!hidden.length) {
+    $('hidden-oi').innerHTML = '<div style="color:var(--m);text-align:center;padding:15px">No unusual OI activity detected</div>';
+    return;
+  }
+
+  $('hidden-oi').innerHTML = hidden.slice(0, 10).map(h => `
+    <div class="strike-item" style="border-left:3px solid ${h.color}">
+      <div><b>${h.strike}</b> ${h.type}<div style="font-size:9px;color:${h.color}">${h.dir}</div></div>
+      <div style="text-align:right"><b style="color:var(--a)">+${fmtL(h.oi)}</b><div style="font-size:8px;color:var(--m)">OI ADDED</div></div>
+    </div>
+  `).join('');
+}
+
+function renderTrendSignal(data, spot, pcr, maxPain, maxCallOI, maxPutOI) {
+  let bullScore = 0, bearScore = 0;
+
+  // PCR analysis
+  if (pcr > 1.3) bullScore += 3; else if (pcr > 1.0) bullScore += 1;
+  if (pcr < 0.7) bearScore += 3; else if (pcr < 0.9) bearScore += 1;
+
+  // Spot vs Max Pain
+  if (spot > maxPain + 30) bullScore += 2; else if (spot < maxPain - 30) bearScore += 2;
+
+  // Put OI support vs Call OI resistance
+  if (maxPutOI.oi > maxCallOI.oi) bullScore += 1; else bearScore += 1;
+
+  // OI change analysis
+  let totalCallOIChg = 0, totalPutOIChg = 0;
+  data.forEach(r => {
+    totalCallOIChg += r.CE?.changeinOpenInterest || 0;
+    totalPutOIChg += r.PE?.changeinOpenInterest || 0;
+  });
+  if (totalPutOIChg > totalCallOIChg * 1.2) bullScore += 2; else if (totalCallOIChg > totalPutOIChg * 1.2) bearScore += 2;
+
+  const total = bullScore + bearScore;
+  const bullPct = total > 0 ? Math.round((bullScore / total) * 100) : 50;
+  const trend = bullPct >= 60 ? 'BULLISH' : bullPct <= 40 ? 'BEARISH' : 'NEUTRAL';
+  const tColor = trend === 'BULLISH' ? 'var(--g)' : trend === 'BEARISH' ? 'var(--r)' : 'var(--y)';
+  const tIcon = trend === 'BULLISH' ? '🟢' : trend === 'BEARISH' ? '🔴' : '🟡';
+
+  $('trend-signal').innerHTML = `
+    <div style="text-align:center;margin-bottom:10px">
+      <div style="font-family:var(--f1);font-size:28px;font-weight:800;color:${tColor}">${tIcon} ${trend}</div>
+      <div style="font-size:10px;color:var(--m);margin-top:4px">Confidence: ${bullPct > 50 ? bullPct : 100-bullPct}%</div>
+    </div>
+    <div style="display:flex;gap:4px;margin-bottom:8px">
+      <div style="flex:${bullPct};background:var(--g);height:8px;border-radius:4px 0 0 4px;transition:flex .5s"></div>
+      <div style="flex:${100-bullPct};background:var(--r);height:8px;border-radius:0 4px 4px 0;transition:flex .5s"></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--m)">
+      <span class="up">BULLS ${bullPct}%</span>
+      <span class="dn">BEARS ${100-bullPct}%</span>
+    </div>
+    <div style="margin-top:10px;font-size:10px;line-height:1.8;color:var(--m)">
+      <div>PCR: <b style="color:${pcr>1?'var(--g)':'var(--r)'}">${pcr}</b> ${pcr>1?'(Put sellers active)':'(Call sellers active)'}</div>
+      <div>Spot vs MaxPain: <b style="color:var(--a)">${spot > maxPain ? '+' : ''}${(spot-maxPain).toFixed(0)} pts</b></div>
+      <div>Support: <b class="up">${maxPutOI.strike}</b> | Resistance: <b class="dn">${maxCallOI.strike}</b></div>
+      <div>Range: <b style="color:var(--p)">${maxPutOI.strike} — ${maxCallOI.strike}</b></div>
+    </div>
+  `;
+}
+
+// ═══════════════════════════════════════════════════════
+// NAVIGATION
+// ═══════════════════════════════════════════════════════
+function showPage(page, btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('on'));
+  document.querySelectorAll('.hdr .nav .nav-btn').forEach(b => b.classList.remove('on'));
+  $('page-' + page).classList.add('on');
+  btn.classList.add('on');
+  APP.page = page;
+  if (page === 'fno' && !APP.fno.data) loadFnO('NIFTY', $('fno-nifty'));
+}
+
+// ═══════════════════════════════════════════════════════
+// REFRESH SCHEDULER
+// ═══════════════════════════════════════════════════════
+function startRefresh() {
+  // Indices every 10s
+  APP.timers.indices = setInterval(() => {
+    if (document.visibilityState === 'visible') refreshIndices();
+  }, 10000);
+
+  // News every 2 min
+  APP.timers.news = setInterval(() => {
+    if (document.visibilityState === 'visible') refreshNews();
+  }, 120000);
+
+  // Bank OI every 30s
+  APP.timers.bank = setInterval(() => {
+    if (document.visibilityState === 'visible' && APP.page === 'equity') refreshBankOI();
+  }, 30000);
+
+  // Option chain every 15s
+  APP.timers.oc = setInterval(() => {
+    if (document.visibilityState === 'visible' && APP.page === 'fno' && APP.fno.data) {
+      refreshFnO();
+    }
+  }, 15000);
+
+  // Clock
+  setInterval(() => {
+    const n = new Date();
+    $('hclock').textContent = n.toLocaleTimeString('en-IN', { hour12: false });
+    const h = n.getHours(), m = n.getMinutes();
+    const open = h > 9 || (h === 9 && m >= 15), close = h > 15 || (h === 15 && m >= 30);
+    if (open && !close) $('mkt-st').innerHTML = '<span style="color:var(--g)">● MARKET OPEN</span>';
+    else $('mkt-st').innerHTML = '<span style="color:var(--m)">● MARKET CLOSED</span>';
+  }, 1000);
+}
+
+// ═══════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════
+async function initDashboard() {
+  toast('Loading market data...', 'info');
+  await Promise.all([refreshIndices(), refreshNews(), refreshBankOI()]);
+  startRefresh();
+  toast('KHABAR Terminal Ready ✓');
+}
+
+window.onload = async () => {
+  loadSavedCredentials();
+
+  // Check for Zerodha callback (returning from login)
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('request_token')) {
+    const success = await handleCallback();
+    if (success) {
+      activateKite();
+      return;
+    }
+  }
+
+  // Check for saved token
+  if (APP.kite.access_token && APP.kite.api_key) {
+    // Validate token
+    toast('Validating Zerodha token...', 'info');
+    const valid = await kiteApi('quote', { instruments: 'NSE:NIFTY 50' });
+    if (valid?.data) {
+      activateKite();
+      return;
+    } else {
+      // Token expired
+      localStorage.removeItem('khabar_access_token');
+      APP.kite.access_token = '';
+      // Show login but still load NSE data
+      if (APP.kite.api_key) {
+        $('login-screen').classList.add('hidden');
+        $('relogin-bar').classList.remove('hidden');
+        $('conn-txt').textContent = 'NSE ONLY';
+        $('conn-dot').className = 'dot dg';
+        initDashboard();
+        return;
+      }
+    }
+  }
+
+  // No credentials at all — check if user has API key saved (show login)
+  if (APP.kite.api_key) {
+    // Has key but no token — show re-login option + load NSE data anyway
+    $('login-screen').classList.add('hidden');
+    $('relogin-bar').classList.remove('hidden');
+    $('conn-txt').textContent = 'NSE ONLY';
+    $('conn-dot').className = 'dot dg';
+    initDashboard();
+  }
+  // else: show login screen (default)
+};
+</script>
+</body>
+</html>
