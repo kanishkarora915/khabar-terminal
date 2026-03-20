@@ -255,16 +255,10 @@ body{background:var(--bg);color:var(--t);font-family:var(--f2);font-size:12px;ov
   <div class="g21">
     <div class="pn">
       <div class="ph">
-        <div class="pt">📈 PRICE CHART + VOLUME</div>
-        <div style="display:flex;gap:4px" id="chart-btns">
-          <button class="nav-btn" onclick="setChartRange('1m','5minute')">1D</button>
-          <button class="nav-btn" onclick="setChartRange('5d','15minute')">5D</button>
-          <button class="nav-btn on" onclick="setChartRange('3mo','1d')">3M</button>
-          <button class="nav-btn" onclick="setChartRange('6mo','1d')">6M</button>
-          <button class="nav-btn" onclick="setChartRange('1y','1d')">1Y</button>
-        </div>
+        <div class="pt">📈 TRADINGVIEW CHART — REAL-TIME</div>
+        <span class="badge bg">LIVE</span>
       </div>
-      <div id="main-chart" style="height:340px"></div>
+      <div id="tv-chart-container" style="height:450px"></div>
     </div>
     <div class="pn">
       <div class="ph"><div class="pt">🤖 AI CHART ANALYSIS</div><span class="badge bp">AUTO</span></div>
@@ -1099,88 +1093,78 @@ function updateFibTable(a) {
 }
 
 // ═══════════════════════════════════════════════════════
-// CHART (Lightweight Charts)
+// CHART (TradingView Widget — Professional Real-Time)
 // ═══════════════════════════════════════════════════════
+function getTVSymbol(sym) {
+  const INDEX_MAP = {
+    'NIFTY 50': 'NSE:NIFTY', 'NIFTY': 'NSE:NIFTY', 'NIFTY50': 'NSE:NIFTY',
+    'NIFTY BANK': 'NSE:BANKNIFTY', 'BANKNIFTY': 'NSE:BANKNIFTY', 'BANK NIFTY': 'NSE:BANKNIFTY',
+    'SENSEX': 'BSE:SENSEX', 'BSE SENSEX': 'BSE:SENSEX',
+    'NIFTY IT': 'NSE:CNXIT', 'NIFTY FIN SERVICE': 'NSE:CNXFINANCE',
+    'FINNIFTY': 'NSE:CNXFINANCE', 'NIFTY AUTO': 'NSE:CNXAUTO',
+    'NIFTY PHARMA': 'NSE:CNXPHARMA', 'NIFTY MIDCAP 100': 'NSE:CNXMIDCAP',
+    'NIFTY METAL': 'NSE:CNXMETAL', 'NIFTY ENERGY': 'NSE:CNXENERGY',
+    'NIFTY REALTY': 'NSE:CNXREALTY', 'NIFTY FMCG': 'NSE:CNXFMCG',
+  };
+  return INDEX_MAP[sym.toUpperCase()] || `NSE:${sym.toUpperCase().replace(/ /g, '')}`;
+}
+
 function updateChart(candles, analysis) {
-  const container = $('main-chart');
+  const container = $('tv-chart-container');
+  if (!container) return;
   container.innerHTML = '';
-  if (!candles.length) return;
 
-  const chart = LightweightCharts.createChart(container, {
-    width: container.clientWidth, height: 340,
-    layout: { background: { color: '#0c1221' }, textColor: '#526580', fontSize: 10 },
-    grid: { vertLines: { color: '#1a274422' }, horzLines: { color: '#1a274422' } },
-    crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
-    rightPriceScale: { borderColor: '#1a2744' },
-    timeScale: { borderColor: '#1a2744', timeVisible: true, secondsVisible: false },
+  const sym = APP.symbol || 'NIFTY 50';
+  const tvSym = getTVSymbol(sym);
+
+  // Create TradingView Advanced Chart Widget
+  const widget = document.createElement('div');
+  widget.id = 'tv-widget';
+  widget.style.cssText = 'width:100%;height:100%';
+  container.appendChild(widget);
+
+  const script = document.createElement('script');
+  script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
+  script.async = true;
+  script.innerHTML = JSON.stringify({
+    "autosize": true,
+    "symbol": tvSym,
+    "interval": "D",
+    "timezone": "Asia/Kolkata",
+    "theme": "dark",
+    "style": "1",
+    "locale": "en",
+    "backgroundColor": "rgba(12, 18, 33, 1)",
+    "gridColor": "rgba(26, 39, 68, 0.15)",
+    "hide_top_toolbar": false,
+    "hide_legend": false,
+    "allow_symbol_change": true,
+    "save_image": true,
+    "calendar": false,
+    "hide_volume": false,
+    "support_host": "https://www.tradingview.com",
+    "studies": ["RSI@tv-basicstudies", "MASimple@tv-basicstudies", "MACD@tv-basicstudies"],
+    "show_popup_button": true,
+    "popup_width": "1000",
+    "popup_height": "650",
+    "withdateranges": true,
+    "details": true,
+    "hotlist": false,
+    "width": "100%",
+    "height": "100%"
   });
-  APP.chart = chart;
 
-  // Candlestick
-  const candleSeries = chart.addCandlestickSeries({
-    upColor: '#00e676', downColor: '#ff3355', borderUpColor: '#00e676', borderDownColor: '#ff3355',
-    wickUpColor: '#00e676', wickDownColor: '#ff3355'
-  });
+  const widgetContainer = document.createElement('div');
+  widgetContainer.className = 'tradingview-widget-container';
+  widgetContainer.style.cssText = 'width:100%;height:100%';
+  const innerDiv = document.createElement('div');
+  innerDiv.className = 'tradingview-widget-container__widget';
+  innerDiv.style.cssText = 'width:100%;height:100%';
+  widgetContainer.appendChild(innerDiv);
+  widgetContainer.appendChild(script);
 
-  const isIntraday = APP.chartInterval !== '1d' && APP.chartInterval !== '1wk' && APP.chartInterval !== '1mo';
-  const candleData = candles.map(c => ({
-    time: isIntraday ? c.time : Math.floor(c.time / 86400) * 86400,
-    open: c.open, high: c.high, low: c.low, close: c.close
-  }));
-  // Deduplicate by time
-  const seen = new Set();
-  const uniqueCandles = candleData.filter(c => { if (seen.has(c.time)) return false; seen.add(c.time); return true; });
-  candleSeries.setData(uniqueCandles);
-  APP.candleSeries = candleSeries;
-
-  // Volume
-  const volSeries = chart.addHistogramSeries({
-    color: '#00ccff33', priceFormat: { type: 'volume' }, priceScaleId: 'vol',
-  });
-  chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } });
-  const volData = candles.map((c, i) => ({
-    time: isIntraday ? c.time : Math.floor(c.time / 86400) * 86400,
-    value: c.volume || 0,
-    color: c.close >= c.open ? 'rgba(0,230,118,.2)' : 'rgba(255,51,85,.2)'
-  }));
-  const seenV = new Set();
-  volSeries.setData(volData.filter(v => { if (seenV.has(v.time)) return false; seenV.add(v.time); return true; }));
-  APP.volSeries = volSeries;
-
-  // SMA overlays (only for daily+ charts)
-  if (!isIntraday && candles.length > 20) {
-    const sma20Data = [], sma50Data = [];
-    for (let i = 0; i < candles.length; i++) {
-      const t = Math.floor(candles[i].time / 86400) * 86400;
-      if (i >= 19) {
-        let sum = 0; for (let j = i-19; j <= i; j++) sum += candles[j].close;
-        sma20Data.push({ time: t, value: sum / 20 });
-      }
-      if (i >= 49) {
-        let sum = 0; for (let j = i-49; j <= i; j++) sum += candles[j].close;
-        sma50Data.push({ time: t, value: sum / 50 });
-      }
-    }
-    if (sma20Data.length) {
-      const s20 = chart.addLineSeries({ color: '#00ccff', lineWidth: 1, priceLineVisible: false, lastValueVisible: false });
-      s20.setData(sma20Data);
-    }
-    if (sma50Data.length) {
-      const s50 = chart.addLineSeries({ color: '#ff6b35', lineWidth: 1, priceLineVisible: false, lastValueVisible: false });
-      s50.setData(sma50Data);
-    }
-  }
-
-  // Price lines for targets/SL
-  if (analysis) {
-    candleSeries.createPriceLine({ price: analysis.target1, color: '#00e676', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'TGT' });
-    candleSeries.createPriceLine({ price: analysis.sl, color: '#ff3355', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'SL' });
-    candleSeries.createPriceLine({ price: analysis.support, color: '#ffc107', lineWidth: 1, lineStyle: 1, axisLabelVisible: true, title: 'SUP' });
-    candleSeries.createPriceLine({ price: analysis.resistance, color: '#b388ff', lineWidth: 1, lineStyle: 1, axisLabelVisible: true, title: 'RES' });
-  }
-
-  chart.timeScale().fitContent();
-  new ResizeObserver(() => { chart.applyOptions({ width: container.clientWidth }); }).observe(container);
+  container.innerHTML = '';
+  container.appendChild(widgetContainer);
 }
 
 // ═══════════════════════════════════════════════════════
