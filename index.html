@@ -814,24 +814,30 @@ async function analyzeStock() {
   $('sh-price').innerHTML = '<span class="spin"></span>';
   toast(`Loading ${sym}...`, 'info');
 
-  // Fetch quote from Kite (real-time) + Yahoo history for chart
-  const kiteSymbol = `NSE:${sym}`;
-  const kiteQuotePromise = APP.kite.active
-    ? kiteApi('quote', { instruments: kiteSymbol })
-    : Promise.resolve(null);
-  const histPromise = nseApi('history', { symbol: sym, range: APP.chartRange || '3mo', interval: APP.chartInterval || '1d' });
+  // Fetch quote + history with timeout protection
+  const timeout = (p, ms) => Promise.race([p, new Promise(r => setTimeout(() => r(null), ms))]);
 
-  const [kiteQuote, histData] = await Promise.all([kiteQuotePromise, histPromise]);
+  const kiteSymbol = `NSE:${sym}`;
+  let kiteQuote = null, histData = null;
+
+  try {
+    [kiteQuote, histData] = await Promise.all([
+      APP.kite.active ? timeout(kiteApi('quote', { instruments: kiteSymbol }), 8000) : null,
+      timeout(nseApi('history', { symbol: sym, range: APP.chartRange || '3mo', interval: APP.chartInterval || '1d' }), 10000)
+    ]);
+  } catch(e) { console.warn('Fetch error:', e); }
 
   // Process Kite quote
   let price = 0, chg = 0, pChg = 0, instrumentToken = null;
-  const kiteKey = Object.keys(kiteQuote?.data || {}).find(k => k.toUpperCase().includes(sym.replace(/ /g, '')) || k.includes(sym)) || kiteSymbol;
-  if (kiteQuote?.data?.[kiteKey]) {
-    const kq = kiteQuote.data[kiteKey];
-    price = kq.last_price;
-    chg = kq.net_change || (price - (kq.ohlc?.close || price));
-    pChg = kq.ohlc?.close ? ((price - kq.ohlc.close) / kq.ohlc.close * 100) : 0;
-    instrumentToken = kq.instrument_token;
+  if (kiteQuote?.data) {
+    const kiteKey = Object.keys(kiteQuote.data).find(k => k.includes(sym.replace(/ /g, ''))) || Object.keys(kiteQuote.data)[0];
+    if (kiteKey && kiteQuote.data[kiteKey]) {
+      const kq = kiteQuote.data[kiteKey];
+      price = kq.last_price || 0;
+      chg = kq.net_change || (price - (kq.ohlc?.close || price));
+      pChg = kq.ohlc?.close ? ((price - kq.ohlc.close) / kq.ohlc.close * 100) : 0;
+      instrumentToken = kq.instrument_token;
+    }
   }
   APP.quote = kiteQuote;
 
@@ -846,29 +852,29 @@ async function analyzeStock() {
     })).filter(c => c.close != null && c.open != null);
   }
 
-  // If Yahoo failed but we have Kite + instrument_token, try Kite historical
+  // If Yahoo failed, try Kite historical
   if (!candles.length && APP.kite.active && instrumentToken) {
-    const rangeMap = { '1d': 5, '5d': 10, '3mo': 90, '6mo': 180, '1y': 365 };
-    const days = rangeMap[APP.chartRange] || 90;
-    const to = new Date(); const from = new Date(to - days * 86400000);
-    const fmt = d => d.toISOString().slice(0, 10);
-    const kiteInterval = { '5m': '5minute', '15m': '15minute', '1d': 'day', '1wk': 'day' }[APP.chartInterval] || 'day';
-    const kHist = await kiteApi('history', {
-      instrument_token: instrumentToken,
-      from: fmt(from), to: fmt(to),
-      interval: kiteInterval
-    });
-    if (kHist?.data?.candles) {
-      candles = kHist.data.candles.map(c => ({
-        time: Math.floor(new Date(c[0]).getTime() / 1000),
-        open: c[1], high: c[2], low: c[3], close: c[4], volume: c[5]
-      }));
-    }
+    try {
+      const rangeMap = { '1d': 5, '5d': 10, '3mo': 90, '6mo': 180, '1y': 365 };
+      const days = rangeMap[APP.chartRange] || 90;
+      const to = new Date(); const from = new Date(to - days * 86400000);
+      const fmt = d => d.toISOString().slice(0, 10);
+      const kiteInterval = { '5m': '5minute', '15m': '15minute', '1d': 'day' }[APP.chartInterval] || 'day';
+      const kHist = await timeout(kiteApi('history', {
+        instrument_token: instrumentToken, from: fmt(from), to: fmt(to), interval: kiteInterval
+      }), 10000);
+      if (kHist?.data?.candles) {
+        candles = kHist.data.candles.map(c => ({
+          time: Math.floor(new Date(c[0]).getTime() / 1000),
+          open: c[1], high: c[2], low: c[3], close: c[4], volume: c[5]
+        }));
+      }
+    } catch(e) { console.warn('Kite history failed:', e); }
   }
   APP.history = candles;
 
   if (!price && candles.length) price = candles[candles.length-1].close;
-  if (!price) { toast(`${sym}: No data found`, 'err'); $('sh-price').textContent = 'NO DATA'; return; }
+  if (!price) { toast(`${sym}: No data found — try a stock like RELIANCE`, 'err'); $('sh-price').textContent = 'NO DATA'; return; }
 
   // Run TA on 1Y daily data for indicators (fetch separately if current range is intraday)
   let taCandles = candles;
