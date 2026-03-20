@@ -876,16 +876,18 @@ async function analyzeStock() {
   if (!price && candles.length) price = candles[candles.length-1].close;
   if (!price) { toast(`${sym}: No data found — try a stock like RELIANCE`, 'err'); $('sh-price').textContent = 'NO DATA'; return; }
 
-  // Run TA on 1Y daily data for indicators (fetch separately if current range is intraday)
+  // Run TA on daily data
   let taCandles = candles;
-  if (APP.chartInterval !== '1d' && APP.chartInterval !== '1wk') {
-    const dailyData = await api('history', { symbol: sym, range: '1y', interval: '1d' });
-    if (dailyData?.chart?.result?.[0]) {
-      const r = dailyData.chart.result[0];
-      const ts = r.timestamp || [];
-      const q = r.indicators?.quote?.[0] || {};
-      taCandles = ts.map((t, i) => ({ time: t, open: q.open?.[i], high: q.high?.[i], low: q.low?.[i], close: q.close?.[i], volume: q.volume?.[i] })).filter(c => c.close != null);
-    }
+  if (APP.chartInterval !== '1d' && APP.chartInterval !== '1wk' && candles.length < 50) {
+    try {
+      const dailyData = await timeout(nseApi('history', { symbol: sym, range: '1y', interval: '1d' }), 8000);
+      if (dailyData?.chart?.result?.[0]) {
+        const r = dailyData.chart.result[0];
+        const ts = r.timestamp || [];
+        const q = r.indicators?.quote?.[0] || {};
+        taCandles = ts.map((t, i) => ({ time: t, open: q.open?.[i], high: q.high?.[i], low: q.low?.[i], close: q.close?.[i], volume: q.volume?.[i] })).filter(c => c.close != null);
+      }
+    } catch(e) { console.warn('TA data fetch failed:', e); }
   }
 
   // Technical Analysis
@@ -893,13 +895,15 @@ async function analyzeStock() {
   APP.analysis = analysis;
 
   // Update UI
-  updateStockHeader(sym, price, chg, pChg, quoteData);
-  updateSignalBanner(analysis);
-  updateChart(candles, analysis);
-  updateAIAnalysis(analysis, sym);
-  updateSignalsList(analysis);
-  updateIndicatorsTable(analysis);
-  updateFibTable(analysis);
+  try {
+    updateStockHeader(sym, price, chg, pChg, kiteQuote);
+    updateSignalBanner(analysis);
+    updateChart(candles, analysis);
+    updateAIAnalysis(analysis, sym);
+    updateSignalsList(analysis);
+    updateIndicatorsTable(analysis);
+    updateFibTable(analysis);
+  } catch(e) { console.error('UI update error:', e); }
   toast(`${sym} loaded ✓`);
 }
 
