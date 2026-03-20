@@ -1820,6 +1820,11 @@ async function loadFnO(index, btn) {
   }
 
   if (!data?.records?.data?.length) {
+    // If we already have old data, keep using it silently (don't spam error toasts on refresh)
+    if (APP.fno.data?.records?.data?.length) {
+      console.warn(`${index} refresh failed, keeping existing data`);
+      return; // Keep old data, don't show error
+    }
     const errMsg = lastError || data?.error || 'All sources failed';
     toast(`${index}: ${errMsg}`, 'err');
 
