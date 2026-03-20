@@ -74,6 +74,23 @@ body{background:var(--bg);color:var(--t);font-family:var(--f2);font-size:12px;ov
 .oc-table th{font-size:8px;color:var(--m);letter-spacing:1px;background:var(--s2)}
 .oc-table tr:hover td{background:rgba(255,255,255,.02)}
 .oc-atm{background:rgba(255,193,7,.08)!important;font-weight:700}
+@keyframes oi-flash{0%,100%{background:transparent}50%{background:rgba(255,193,7,.25)}}
+@keyframes oi-spike-ce{0%,100%{box-shadow:none}50%{box-shadow:inset 4px 0 0 var(--g)}}
+@keyframes oi-spike-pe{0%,100%{box-shadow:none}50%{box-shadow:inset -4px 0 0 var(--r)}}
+.oi-flash-row{animation:oi-flash .8s ease infinite}
+.oi-spike-ce{animation:oi-spike-ce 1s ease infinite;background:rgba(0,230,118,.06)!important}
+.oi-spike-pe{animation:oi-spike-pe 1s ease infinite;background:rgba(255,51,85,.06)!important}
+.oi-popup{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--s2);border:1px solid var(--a);border-radius:12px;padding:20px;z-index:9999;min-width:340px;max-width:500px;box-shadow:0 20px 60px rgba(0,0,0,.6)}
+.oi-popup-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:9998}
+.oi-popup h3{margin:0 0 12px;color:var(--a);font-size:14px;letter-spacing:1px}
+.oi-popup .close-btn{position:absolute;top:10px;right:14px;color:var(--m);cursor:pointer;font-size:18px}
+.oi-detail-row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--bd);font-size:11px}
+.oi-detail-row .label{color:var(--m)}
+.oi-verdict{margin-top:12px;padding:10px;border-radius:8px;text-align:center;font-weight:700;font-size:12px;letter-spacing:1px}
+.sb-panel{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.sb-card{background:var(--s1);border-radius:8px;padding:10px;text-align:center;border-left:3px solid var(--bd)}
+.sb-card .sb-pct{font-size:20px;font-weight:700;font-family:var(--f1)}
+.sb-card .sb-lbl{font-size:8px;color:var(--m);letter-spacing:1px;margin-top:3px}
 .shg{display:grid;grid-template-columns:repeat(4,1fr);gap:5px}
 .sheat{padding:8px 4px;border-radius:6px;text-align:center;font-size:9px;font-weight:700;cursor:default}
 .ai-box{background:var(--bg);border-left:2px solid var(--a);border-radius:6px;padding:12px;font-size:11px;line-height:1.8;min-height:70px}
@@ -427,6 +444,39 @@ body{background:var(--bg);color:var(--t);font-family:var(--f2);font-size:12px;ov
     </div>
   </div>
 
+  <!-- OI FLASH ALERTS + SELLER vs BUYER -->
+  <div class="g2">
+    <div class="pn">
+      <div class="ph"><div class="pt">⚡ OI SPIKE ALERTS — AUTO FLASH</div><span class="badge br" id="oi-alert-count">0 ALERTS</span></div>
+      <div id="oi-alerts-panel" style="max-height:260px;overflow-y:auto">
+        <div style="color:var(--m);text-align:center;padding:15px;font-size:10px">Monitoring OI changes...<br>Strikes with sudden OI spikes will flash in the option chain table ⚡</div>
+      </div>
+    </div>
+    <div class="pn">
+      <div class="ph"><div class="pt">⚔️ SELLER vs BUYER — DOMINANCE</div><span class="badge ba">LIVE</span></div>
+      <div id="seller-buyer-panel">
+        <div class="sb-panel">
+          <div class="sb-card" style="border-left-color:var(--r)"><div class="sb-pct" id="sb-call-sell">--</div><div class="sb-lbl">CALL SELLERS</div><div style="font-size:9px;color:var(--m)" id="sb-call-sell-d">Resistance writers</div></div>
+          <div class="sb-card" style="border-left-color:var(--g)"><div class="sb-pct" id="sb-call-buy">--</div><div class="sb-lbl">CALL BUYERS</div><div style="font-size:9px;color:var(--m)" id="sb-call-buy-d">Breakout hunters</div></div>
+          <div class="sb-card" style="border-left-color:var(--g)"><div class="sb-pct" id="sb-put-sell">--</div><div class="sb-lbl">PUT SELLERS</div><div style="font-size:9px;color:var(--m)" id="sb-put-sell-d">Support builders</div></div>
+          <div class="sb-card" style="border-left-color:var(--r)"><div class="sb-pct" id="sb-put-buy">--</div><div class="sb-lbl">PUT BUYERS</div><div style="font-size:9px;color:var(--m)" id="sb-put-buy-d">Crash protectors</div></div>
+        </div>
+        <div style="margin-top:10px;padding:8px;background:var(--s1);border-radius:6px;text-align:center" id="sb-verdict">
+          <div style="font-size:9px;color:var(--m);letter-spacing:1px">MARKET CONTROL</div>
+          <div style="font-size:13px;font-weight:700;margin-top:3px" id="sb-who">Analyzing...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- OI POPUP (hidden by default) -->
+  <div id="oi-popup-overlay" class="oi-popup-overlay" style="display:none" onclick="closeOIPopup()"></div>
+  <div id="oi-popup" class="oi-popup" style="display:none">
+    <span class="close-btn" onclick="closeOIPopup()">✕</span>
+    <h3 id="oi-popup-title">Strike Details</h3>
+    <div id="oi-popup-body"></div>
+  </div>
+
   <!-- GREEKS + IV ANALYSIS (Sensibull-style) -->
   <div class="g2">
     <div class="pn">
@@ -615,7 +665,7 @@ body{background:var(--bg);color:var(--t);font-family:var(--f2);font-size:12px;ov
 const APP = {
   page: 'equity', symbol: '', quote: null, history: [], analysis: null,
   chart: null, candleSeries: null, volSeries: null, sma20Series: null, sma50Series: null,
-  fno: { index: 'NIFTY', expiry: '', data: null, processed: null },
+  fno: { index: 'NIFTY', expiry: '', data: null, processed: null, prevOI: {}, oiHistory: [], alertStrikes: {} },
   indices: {}, news: [], lastNewsTitle: '', bankData: [],
   timers: {}, connected: false, chartRange: '3mo', chartInterval: '1d',
   // Zerodha Auth
@@ -1537,6 +1587,12 @@ function processAndRenderOC(raw) {
   renderGreeks(allData, spot);
   renderStraddlePanel(allData, spot);
   renderTopMoversOI(allData);
+
+  // OI Flash Alerts — detect sudden spikes
+  detectOISpikes(allData, spot);
+
+  // Seller vs Buyer Dominance
+  renderSellerBuyer(allData, spot);
 }
 
 function calculateMaxPain(data) {
@@ -1701,6 +1757,228 @@ function renderHiddenOI(data, spot) {
       <div style="text-align:right"><b style="color:var(--a)">+${fmtL(h.oi)}</b><div style="font-size:8px;color:var(--m)">OI ADDED</div></div>
     </div>
   `).join('');
+}
+
+// ═══════════════════════════════════════════════════════
+// OI FLASH ALERTS — Detect sudden spikes, flash rows, popup details
+// ═══════════════════════════════════════════════════════
+function detectOISpikes(data, spot) {
+  const prev = APP.fno.prevOI;
+  const alerts = [];
+  const now = new Date().toLocaleTimeString('en-IN', { hour12: false });
+
+  data.forEach(r => {
+    const strike = r.strikePrice;
+    const prevData = prev[strike] || {};
+
+    // CE spike detection
+    if (r.CE) {
+      const curOI = r.CE.openInterest || 0;
+      const prevOI = prevData.ceOI || 0;
+      const oiDiff = curOI - prevOI;
+      const pctChg = prevOI > 0 ? Math.abs(oiDiff / prevOI * 100) : 0;
+
+      if (prevOI > 0 && (pctChg > 8 || Math.abs(oiDiff) > 50000)) {
+        const priceChg = r.CE.change || 0;
+        let action = 'UNKNOWN';
+        let color = 'var(--y)';
+        if (oiDiff > 0 && priceChg <= 0) { action = '🔴 CALL WRITING (Sellers Active)'; color = 'var(--r)'; }
+        else if (oiDiff > 0 && priceChg > 0) { action = '🟢 CALL BUYING (Bulls Active)'; color = 'var(--g)'; }
+        else if (oiDiff < 0 && priceChg > 0) { action = '🟡 SHORT COVERING (Bears Exiting)'; color = 'var(--y)'; }
+        else if (oiDiff < 0 && priceChg <= 0) { action = '⚪ LONG UNWINDING (Bulls Exiting)'; color = 'var(--m)'; }
+
+        alerts.push({ strike, type: 'CE', prevOI, curOI, diff: oiDiff, pct: pctChg, action, color, price: r.CE.lastPrice, priceChg, time: now, spot });
+      }
+    }
+
+    // PE spike detection
+    if (r.PE) {
+      const curOI = r.PE.openInterest || 0;
+      const prevOI = prevData.peOI || 0;
+      const oiDiff = curOI - prevOI;
+      const pctChg = prevOI > 0 ? Math.abs(oiDiff / prevOI * 100) : 0;
+
+      if (prevOI > 0 && (pctChg > 8 || Math.abs(oiDiff) > 50000)) {
+        const priceChg = r.PE.change || 0;
+        let action = 'UNKNOWN';
+        let color = 'var(--y)';
+        if (oiDiff > 0 && priceChg <= 0) { action = '🟢 PUT WRITING (Bulls Active)'; color = 'var(--g)'; }
+        else if (oiDiff > 0 && priceChg > 0) { action = '🔴 PUT BUYING (Bears Active)'; color = 'var(--r)'; }
+        else if (oiDiff < 0 && priceChg > 0) { action = '⚪ LONG UNWINDING (Bears Exiting)'; color = 'var(--m)'; }
+        else if (oiDiff < 0 && priceChg <= 0) { action = '🟡 SHORT COVERING (Bulls Exiting)'; color = 'var(--y)'; }
+
+        alerts.push({ strike, type: 'PE', prevOI, curOI, diff: oiDiff, pct: pctChg, action, color, price: r.PE.lastPrice, priceChg, time: now, spot });
+      }
+    }
+
+    // Save current as previous
+    prev[strike] = { ceOI: r.CE?.openInterest || 0, peOI: r.PE?.openInterest || 0, cePrice: r.CE?.lastPrice || 0, pePrice: r.PE?.lastPrice || 0 };
+  });
+
+  APP.fno.prevOI = prev;
+  APP.fno.alertStrikes = {};
+  alerts.forEach(a => { APP.fno.alertStrikes[`${a.strike}_${a.type}`] = a; });
+
+  // Store in history (last 50)
+  if (alerts.length) {
+    APP.fno.oiHistory = [...alerts, ...APP.fno.oiHistory].slice(0, 50);
+  }
+
+  // Flash rows in OC table
+  document.querySelectorAll('#oc-body tr').forEach(row => row.classList.remove('oi-flash-row', 'oi-spike-ce', 'oi-spike-pe'));
+  alerts.forEach(a => {
+    const rows = document.querySelectorAll('#oc-body tr');
+    rows.forEach(row => {
+      if (row.textContent.includes(a.strike.toString())) {
+        row.classList.add('oi-flash-row');
+        row.classList.add(a.type === 'CE' ? 'oi-spike-ce' : 'oi-spike-pe');
+        row.style.cursor = 'pointer';
+        row.onclick = () => showOIPopup(a.strike);
+      }
+    });
+  });
+
+  // Render alerts panel
+  $('oi-alert-count').textContent = `${alerts.length} ALERT${alerts.length !== 1 ? 'S' : ''}`;
+  if (!alerts.length && !APP.fno.oiHistory.length) {
+    $('oi-alerts-panel').innerHTML = '<div style="color:var(--m);text-align:center;padding:15px;font-size:10px">Monitoring... Strikes with sudden OI spikes will appear here ⚡<br><span style="font-size:8px">Alerts trigger when OI changes >8% or >50K contracts between refreshes</span></div>';
+    return;
+  }
+
+  const allAlerts = APP.fno.oiHistory.slice(0, 20);
+  $('oi-alerts-panel').innerHTML = allAlerts.map(a => `
+    <div class="strike-item" style="border-left:3px solid ${a.color};cursor:pointer" onclick="showOIPopup(${a.strike})">
+      <div>
+        <b>${a.strike}</b> <span style="font-size:9px;color:var(--m)">${a.type}</span>
+        <div style="font-size:9px;color:${a.color}">${a.action}</div>
+      </div>
+      <div style="text-align:right">
+        <b style="color:${a.diff > 0 ? 'var(--g)' : 'var(--r)'}">${a.diff > 0 ? '+' : ''}${fmtL(a.diff)}</b>
+        <div style="font-size:8px;color:var(--m)">${a.time} · ${a.pct.toFixed(1)}%</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function showOIPopup(strike) {
+  const data = APP.fno.data?.records?.data || [];
+  const row = data.find(r => r.strikePrice === strike);
+  if (!row) return;
+
+  const prev = APP.fno.prevOI[strike] || {};
+  const ce = row.CE || {};
+  const pe = row.PE || {};
+  const spot = row.CE?.underlyingValue || row.PE?.underlyingValue || 0;
+
+  // CE Analysis
+  const ceDiff = (ce.openInterest || 0) - (prev.ceOI || ce.openInterest || 0);
+  const ceAction = ceDiff > 0 ? (ce.change <= 0 ? 'CALL WRITING ✍️' : 'CALL BUYING 📈') : (ce.change > 0 ? 'SHORT COVERING 🔄' : 'LONG UNWINDING 📉');
+  const ceVerdict = ceDiff > 0 ? (ce.change <= 0 ? 'BEARISH — Sellers adding positions' : 'BULLISH for CE — Buyers entering') : (ce.change > 0 ? 'BULLISH — Shorts covering' : 'BEARISH — Longs exiting');
+
+  // PE Analysis
+  const peDiff = (pe.openInterest || 0) - (prev.peOI || pe.openInterest || 0);
+  const peAction = peDiff > 0 ? (pe.change <= 0 ? 'PUT WRITING ✍️' : 'PUT BUYING 📈') : (pe.change > 0 ? 'LONG UNWINDING 📉' : 'SHORT COVERING 🔄');
+  const peVerdict = peDiff > 0 ? (pe.change <= 0 ? 'BULLISH — Put sellers supporting' : 'BEARISH — Put buyers hedging') : (pe.change > 0 ? 'BEARISH — Longs unwinding' : 'BULLISH — Shorts covering');
+
+  const distFromSpot = spot ? ((strike - spot) / spot * 100).toFixed(2) : '?';
+  const moneyness = strike < spot ? 'ITM for CE / OTM for PE' : strike > spot ? 'OTM for CE / ITM for PE' : 'ATM';
+
+  $('oi-popup-title').textContent = `⚡ Strike ${strike} — OI Analysis`;
+  $('oi-popup-body').innerHTML = `
+    <div style="font-size:10px;color:var(--m);margin-bottom:10px">Spot: ${fmt(spot)} · Distance: ${distFromSpot}% · ${moneyness}</div>
+
+    <div style="font-size:11px;color:var(--a);font-weight:700;margin-bottom:6px">📞 CALL OPTION</div>
+    <div class="oi-detail-row"><span class="label">Current OI</span><span>${fmtL(ce.openInterest || 0)}</span></div>
+    <div class="oi-detail-row"><span class="label">OI Change</span><span style="color:${ceDiff >= 0 ? 'var(--g)' : 'var(--r)'};font-weight:700">${ceDiff >= 0 ? '+' : ''}${fmtL(ceDiff)}</span></div>
+    <div class="oi-detail-row"><span class="label">LTP</span><span>₹${(ce.lastPrice||0).toFixed(2)}</span></div>
+    <div class="oi-detail-row"><span class="label">Price Change</span><span style="color:${(ce.change||0) >= 0 ? 'var(--g)' : 'var(--r)'}">${(ce.change||0) >= 0 ? '+' : ''}${(ce.change||0).toFixed(2)}</span></div>
+    <div class="oi-detail-row"><span class="label">Volume</span><span>${fmtL(ce.totalTradedVolume || 0)}</span></div>
+    <div class="oi-detail-row"><span class="label">Action</span><span style="font-weight:700">${ceAction}</span></div>
+    <div class="oi-verdict" style="background:${ceDiff > 0 && ce.change <= 0 ? 'rgba(255,51,85,.1);color:var(--r)' : 'rgba(0,230,118,.1);color:var(--g)'}">${ceVerdict}</div>
+
+    <div style="font-size:11px;color:var(--a);font-weight:700;margin:16px 0 6px">📍 PUT OPTION</div>
+    <div class="oi-detail-row"><span class="label">Current OI</span><span>${fmtL(pe.openInterest || 0)}</span></div>
+    <div class="oi-detail-row"><span class="label">OI Change</span><span style="color:${peDiff >= 0 ? 'var(--g)' : 'var(--r)'};font-weight:700">${peDiff >= 0 ? '+' : ''}${fmtL(peDiff)}</span></div>
+    <div class="oi-detail-row"><span class="label">LTP</span><span>₹${(pe.lastPrice||0).toFixed(2)}</span></div>
+    <div class="oi-detail-row"><span class="label">Price Change</span><span style="color:${(pe.change||0) >= 0 ? 'var(--g)' : 'var(--r)'}">${(pe.change||0) >= 0 ? '+' : ''}${(pe.change||0).toFixed(2)}</span></div>
+    <div class="oi-detail-row"><span class="label">Volume</span><span>${fmtL(pe.totalTradedVolume || 0)}</span></div>
+    <div class="oi-detail-row"><span class="label">Action</span><span style="font-weight:700">${peAction}</span></div>
+    <div class="oi-verdict" style="background:${peDiff > 0 && pe.change <= 0 ? 'rgba(0,230,118,.1);color:var(--g)' : 'rgba(255,51,85,.1);color:var(--r)'}">${peVerdict}</div>
+  `;
+
+  $('oi-popup').style.display = 'block';
+  $('oi-popup-overlay').style.display = 'block';
+}
+
+function closeOIPopup() {
+  $('oi-popup').style.display = 'none';
+  $('oi-popup-overlay').style.display = 'none';
+}
+
+// ═══════════════════════════════════════════════════════
+// SELLER vs BUYER DOMINANCE
+// ═══════════════════════════════════════════════════════
+function renderSellerBuyer(data, spot) {
+  let callSellOI = 0, callBuyOI = 0, putSellOI = 0, putBuyOI = 0;
+  let callSellCount = 0, callBuyCount = 0, putSellCount = 0, putBuyCount = 0;
+
+  data.forEach(r => {
+    // CE: OI up + price down = sellers, OI up + price up = buyers
+    if (r.CE && (r.CE.changeinOpenInterest || 0) > 0) {
+      if (r.CE.change <= 0) { callSellOI += r.CE.changeinOpenInterest; callSellCount++; }
+      else { callBuyOI += r.CE.changeinOpenInterest; callBuyCount++; }
+    }
+    // CE: OI down + price up = short covering (buyer side), OI down + price down = long unwinding (seller side)
+    if (r.CE && (r.CE.changeinOpenInterest || 0) < 0) {
+      if (r.CE.change > 0) callBuyOI += Math.abs(r.CE.changeinOpenInterest);
+      else callSellOI += Math.abs(r.CE.changeinOpenInterest);
+    }
+
+    // PE: OI up + price down = sellers (put writing), OI up + price up = buyers (put buying)
+    if (r.PE && (r.PE.changeinOpenInterest || 0) > 0) {
+      if (r.PE.change <= 0) { putSellOI += r.PE.changeinOpenInterest; putSellCount++; }
+      else { putBuyOI += r.PE.changeinOpenInterest; putBuyCount++; }
+    }
+    if (r.PE && (r.PE.changeinOpenInterest || 0) < 0) {
+      if (r.PE.change > 0) putBuyOI += Math.abs(r.PE.changeinOpenInterest);
+      else putSellOI += Math.abs(r.PE.changeinOpenInterest);
+    }
+  });
+
+  const totalCall = callSellOI + callBuyOI || 1;
+  const totalPut = putSellOI + putBuyOI || 1;
+  const callSellPct = (callSellOI / totalCall * 100).toFixed(0);
+  const callBuyPct = (callBuyOI / totalCall * 100).toFixed(0);
+  const putSellPct = (putSellOI / totalPut * 100).toFixed(0);
+  const putBuyPct = (putBuyOI / totalPut * 100).toFixed(0);
+
+  $('sb-call-sell').textContent = callSellPct + '%';
+  $('sb-call-sell').style.color = callSellPct > 50 ? 'var(--r)' : 'var(--m)';
+  $('sb-call-sell-d').textContent = `${fmtL(callSellOI)} OI · ${callSellCount} strikes`;
+
+  $('sb-call-buy').textContent = callBuyPct + '%';
+  $('sb-call-buy').style.color = callBuyPct > 50 ? 'var(--g)' : 'var(--m)';
+  $('sb-call-buy-d').textContent = `${fmtL(callBuyOI)} OI · ${callBuyCount} strikes`;
+
+  $('sb-put-sell').textContent = putSellPct + '%';
+  $('sb-put-sell').style.color = putSellPct > 50 ? 'var(--g)' : 'var(--m)';
+  $('sb-put-sell-d').textContent = `${fmtL(putSellOI)} OI · ${putSellCount} strikes`;
+
+  $('sb-put-buy').textContent = putBuyPct + '%';
+  $('sb-put-buy').style.color = putBuyPct > 50 ? 'var(--r)' : 'var(--m)';
+  $('sb-put-buy-d').textContent = `${fmtL(putBuyOI)} OI · ${putBuyCount} strikes`;
+
+  // Overall verdict
+  const bullForces = parseInt(callSellPct) + parseInt(putSellPct); // Call sellers (resistance) + Put sellers (support) = bullish
+  const bearForces = parseInt(callBuyPct) + parseInt(putBuyPct); // Call buyers + Put buyers = bearish
+
+  let who, whoColor;
+  if (bullForces > bearForces + 20) { who = '🐂 SELLERS DOMINATING — BULLISH CONTROL'; whoColor = 'var(--g)'; }
+  else if (bearForces > bullForces + 20) { who = '🐻 BUYERS DOMINATING — BEARISH PRESSURE'; whoColor = 'var(--r)'; }
+  else { who = '⚖️ BALANCED — NO CLEAR DOMINANCE'; whoColor = 'var(--y)'; }
+
+  $('sb-who').textContent = who;
+  $('sb-who').style.color = whoColor;
 }
 
 function renderTrendSignal(data, spot, pcr, maxPain, maxCallOI, maxPutOI) {
