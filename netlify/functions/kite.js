@@ -54,11 +54,11 @@ function sha256(str) { return crypto.createHash('sha256').update(str).digest('he
 function parseCSV(csv) {
   const lines = csv.split('\n');
   if (lines.length < 2) return [];
-  const headers = lines[0].split(',').map(h => h.trim());
+  const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
   return lines.slice(1).filter(l => l.trim()).map(l => {
     const vals = l.split(',');
     const obj = {};
-    headers.forEach((h, i) => { obj[h] = (vals[i] || '').trim(); });
+    headers.forEach((h, i) => { obj[h] = (vals[i] || '').trim().replace(/^"|"$/g, ''); });
     return obj;
   });
 }
