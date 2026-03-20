@@ -257,11 +257,11 @@ body{background:var(--bg);color:var(--t);font-family:var(--f2);font-size:12px;ov
       <div class="ph">
         <div class="pt">📈 PRICE CHART + VOLUME</div>
         <div style="display:flex;gap:4px" id="chart-btns">
-          <button class="nav-btn" onclick="setChartRange('1d','5minute')">1D</button>
-          <button class="nav-btn" onclick="setChartRange('5d','15minute')">5D</button>
-          <button class="nav-btn on" onclick="setChartRange('3mo','day')">3M</button>
-          <button class="nav-btn" onclick="setChartRange('6mo','day')">6M</button>
-          <button class="nav-btn" onclick="setChartRange('1y','day')">1Y</button>
+          <button class="nav-btn" onclick="setChartRange('1d','5m')">1D</button>
+          <button class="nav-btn" onclick="setChartRange('5d','15m')">5D</button>
+          <button class="nav-btn on" onclick="setChartRange('3mo','1d')">3M</button>
+          <button class="nav-btn" onclick="setChartRange('6mo','1d')">6M</button>
+          <button class="nav-btn" onclick="setChartRange('1y','1d')">1Y</button>
         </div>
       </div>
       <div id="main-chart" style="height:400px"></div>
@@ -852,10 +852,11 @@ async function analyzeStock() {
     const days = rangeMap[APP.chartRange] || 90;
     const to = new Date(); const from = new Date(to - days * 86400000);
     const fmt = d => d.toISOString().slice(0, 10);
+    const kiteInterval = { '5m': '5minute', '15m': '15minute', '1d': 'day', '1wk': 'day' }[APP.chartInterval] || 'day';
     const kHist = await kiteApi('history', {
       instrument_token: instrumentToken,
       from: fmt(from), to: fmt(to),
-      interval: APP.chartInterval === '5minute' ? '5minute' : APP.chartInterval === '15minute' ? '15minute' : 'day'
+      interval: kiteInterval
     });
     if (kHist?.data?.candles) {
       candles = kHist.data.candles.map(c => ({
@@ -1818,9 +1819,9 @@ async function initDashboard() {
     loadFnO('NIFTY', $('fno-nifty')),  // Pre-load option chain
   ]);
 
-  // Auto-load NIFTY 50 on equity page with chart + analysis
+  // Auto-load NIFTY 50 on equity page (non-blocking)
   $('search-input').value = 'NIFTY 50';
-  try { await analyzeStock(); } catch(e) { console.warn('Auto-analyze failed:', e); }
+  analyzeStock().catch(e => console.warn('Auto-analyze failed:', e));
 
   startRefresh();
   toast('KHABAR Terminal Ready ✓');
