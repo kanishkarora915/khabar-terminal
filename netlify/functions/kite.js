@@ -106,13 +106,21 @@ async function buildOptionChain(apiKey, token, symbol, expiry) {
   // Get unique expiry dates and sort
   const expiries = [...new Set(opts.map(o => o.expiry))].sort((a, b) => new Date(a) - new Date(b));
 
-  // Handle expiry param in various formats
+  // Handle expiry param in various formats (YYYY-MM-DD, DD-Mon-YYYY, etc.)
   let selectedExpiry = expiries[0];
   if (expiry) {
     if (expiries.includes(expiry)) {
       selectedExpiry = expiry;
     } else {
-      const parsed = new Date(expiry);
+      // Try parsing DD-Mon-YYYY format (e.g., "27-Mar-2026")
+      const months = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+      const ddMonMatch = expiry.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{4})$/);
+      let parsed;
+      if (ddMonMatch) {
+        parsed = new Date(Date.UTC(parseInt(ddMonMatch[3]), months[ddMonMatch[2]], parseInt(ddMonMatch[1])));
+      } else {
+        parsed = new Date(expiry);
+      }
       if (!isNaN(parsed)) {
         const match = expiries.find(e => new Date(e).toDateString() === parsed.toDateString());
         if (match) selectedExpiry = match;

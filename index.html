@@ -1958,31 +1958,38 @@ function setChartRange(range, interval) {
 // ═══════════════════════════════════════════════════════
 // F&O — OPTION CHAIN
 // ═══════════════════════════════════════════════════════
-async function loadFnO(index, btn) {
+async function loadFnO(index, btn, isRefresh) {
+  const prevIndex = APP.fno.index;
   APP.fno.index = index;
   document.querySelectorAll('#page-fno .nav-btn').forEach(b => b.classList.remove('on'));
   if (btn) btn.classList.add('on');
-  toast(`Loading ${index} option chain...`, 'info');
+  if (!isRefresh) toast(`Loading ${index} option chain...`, 'info');
+
+  // If switching index, reset expiry so it picks up the new index's first expiry
+  if (index !== prevIndex) APP.fno.expiry = '';
 
   // Try Kite API first (reliable, no IP blocking), then NSE as fallback
   let data = null;
   let lastError = '';
   if (APP.kite.active) {
-    toast(`Fetching ${index} via Kite API...`, 'info');
-    data = await kiteApi('option-chain', { symbol: index });
+    if (!isRefresh) toast(`Fetching ${index} via Kite API...`, 'info');
+    // Pass current expiry if user has one selected (for refresh), otherwise default
+    const kiteParams = { symbol: index };
+    if (APP.fno.expiry) kiteParams.expiry = APP.fno.expiry;
+    data = await kiteApi('option-chain', kiteParams);
     if (data?.error) { lastError = data.error; console.warn('Kite OC error:', data.error, data._debug); data = null; }
     if (data?._debug) console.log('Kite OC debug:', data._debug);
   }
 
   if (!data?.records?.data?.length) {
     // Kite unavailable or failed — try NSE
-    toast(`Trying NSE for ${index}...`, 'info');
+    if (!isRefresh) toast(`Trying NSE for ${index}...`, 'info');
     data = await nseApi('option-chain', { symbol: index, type: 'indices' });
   }
 
   if (!data?.records?.data?.length) {
     // NSE also failed — retry once
-    toast(`Retrying ${index}...`, 'info');
+    if (!isRefresh) toast(`Retrying ${index}...`, 'info');
     await new Promise(r => setTimeout(r, 1500));
     data = await nseApi('option-chain', { symbol: index, type: 'indices' });
   }
@@ -2022,7 +2029,7 @@ async function loadFnO(index, btn) {
   }
 
   processAndRenderOC(data);
-  toast(`${index} option chain loaded ✓`);
+  if (!isRefresh) toast(`${index} option chain loaded ✓`);
 }
 
 async function changeExpiry() {
@@ -2055,21 +2062,36 @@ async function changeExpiry() {
   }
 }
 
-function refreshFnO() { loadFnO(APP.fno.index, document.querySelector(`#fno-${APP.fno.index.toLowerCase().replace('nifty','nifty')}`)); }
+function refreshFnO() { loadFnO(APP.fno.index, null, true); }
 
 function processAndRenderOC(raw) {
   const expiry = APP.fno.expiry;
-  const allData = raw.records.data.filter(r => r.expiryDate === expiry);
-  if (!allData.length) {
-    // If selected expiry has no data, fallback to first available
-    const firstExpiry = raw.records.expiryDates?.[0];
-    if (firstExpiry && firstExpiry !== expiry) {
-      APP.fno.expiry = firstExpiry;
-      const sel = $('expiry-sel');
-      if (sel) sel.value = firstExpiry;
-      return processAndRenderOC(raw);
+  let allData = raw.records.data.filter(r => r.expiryDate === expiry);
+
+  // If selected expiry not found in this data (e.g. Kite returned different expiry format)
+  // Try fuzzy match by date
+  if (!allData.length && expiry) {
+    const targetDate = new Date(expiry.replace(/(\d{2})-([A-Za-z]{3})-(\d{4})/, '$2 $1, $3'));
+    if (!isNaN(targetDate)) {
+      allData = raw.records.data.filter(r => {
+        const rd = new Date(r.expiryDate.replace(/(\d{2})-([A-Za-z]{3})-(\d{4})/, '$2 $1, $3'));
+        return !isNaN(rd) && rd.toDateString() === targetDate.toDateString();
+      });
     }
-    return;
+  }
+
+  // Still no data — only fallback to first expiry if user hasn't explicitly chosen
+  if (!allData.length) {
+    const firstExpiry = raw.records.expiryDates?.[0];
+    if (firstExpiry) {
+      allData = raw.records.data.filter(r => r.expiryDate === firstExpiry);
+      if (allData.length) {
+        APP.fno.expiry = firstExpiry;
+        const sel = $('expiry-sel');
+        if (sel) sel.value = firstExpiry;
+      }
+    }
+    if (!allData.length) return;
   }
 
   const spot = allData[0]?.CE?.underlyingValue || allData[0]?.PE?.underlyingValue || 0;
