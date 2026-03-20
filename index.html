@@ -1189,11 +1189,23 @@ async function loadFnO(index, btn) {
   if (btn) btn.classList.add('on');
   toast(`Loading ${index} option chain...`, 'info');
 
-  // Try NSE first, then show detailed error
-  let data = await nseApi('option-chain', { symbol: index, type: 'indices' });
+  // Try Kite API first (reliable, no IP blocking), then NSE as fallback
+  let data = null;
+  if (APP.kite.active) {
+    try {
+      toast(`Fetching ${index} via Kite API...`, 'info');
+      data = await kiteApi('option-chain', { symbol: index });
+    } catch(e) { console.warn('Kite option-chain failed:', e); }
+  }
 
   if (!data?.records?.data) {
-    // NSE failed — try with slight delay (cookie issue)
+    // Kite unavailable or failed — try NSE
+    toast(`Trying NSE for ${index}...`, 'info');
+    data = await nseApi('option-chain', { symbol: index, type: 'indices' });
+  }
+
+  if (!data?.records?.data) {
+    // NSE also failed — retry once with fresh cookies
     toast(`Retrying ${index} option chain...`, 'info');
     await new Promise(r => setTimeout(r, 1500));
     data = await nseApi('option-chain', { symbol: index, type: 'indices' });
@@ -1201,15 +1213,15 @@ async function loadFnO(index, btn) {
 
   if (!data?.records?.data) {
     // Still failed — show error with details
-    const errMsg = data?.error || 'NSE may be blocking cloud requests';
+    const errMsg = data?.error || 'Data source unavailable';
     toast(`${index}: Option chain failed — ${errMsg}`, 'err');
 
     // Show helpful message in the UI
     $('oc-body').innerHTML = `<tr><td colspan="11" style="color:var(--r);text-align:center;padding:20px">
-      <b>NSE Option Chain Loading Failed</b><br>
+      <b>Option Chain Loading Failed</b><br>
       <span style="color:var(--m);font-size:10px">Error: ${errMsg}</span><br><br>
-      <span style="color:var(--m);font-size:10px">This happens when NSE blocks cloud server requests.<br>
-      Try clicking <b>REFRESH</b> button, or check back during market hours (9:15 AM - 3:30 PM).</span>
+      <span style="color:var(--m);font-size:10px">${APP.kite.active ? 'Kite API returned no data. Check if market is open or try REFRESH.' : 'Login with Zerodha API key for reliable real-time option chain data.<br>NSE blocks cloud server requests — Kite API bypasses this.'}<br>
+      Try clicking <b>REFRESH</b> button.</span>
     </td></tr>`;
     return;
   }
@@ -1225,8 +1237,27 @@ async function loadFnO(index, btn) {
   toast(`${index} option chain loaded ✓`);
 }
 
-function changeExpiry() {
-  APP.fno.expiry = $('expiry-sel').value;
+async function changeExpiry() {
+  const newExpiry = $('expiry-sel').value;
+  APP.fno.expiry = newExpiry;
+
+  // If Kite is active, re-fetch for new expiry (Kite returns data per expiry)
+  if (APP.kite.active) {
+    toast(`Loading ${APP.fno.index} ${newExpiry}...`, 'info');
+    try {
+      const data = await kiteApi('option-chain', { symbol: APP.fno.index, expiry: newExpiry });
+      if (data?.records?.data) {
+        // Preserve expiry list from original data
+        data.records.expiryDates = APP.fno.data?.records?.expiryDates || data.records.expiryDates;
+        APP.fno.data = data;
+        processAndRenderOC(data);
+        toast(`${APP.fno.index} ${newExpiry} loaded ✓`);
+        return;
+      }
+    } catch(e) { console.warn('Kite expiry change failed:', e); }
+  }
+
+  // NSE data has all expiries in one response, just re-render
   if (APP.fno.data) processAndRenderOC(APP.fno.data);
 }
 
