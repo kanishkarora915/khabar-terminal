@@ -1818,8 +1818,9 @@ async function initDashboard() {
     loadFnO('NIFTY', $('fno-nifty')),  // Pre-load option chain
   ]);
 
-  // Auto-load NIFTY 50 on equity page for quick view
+  // Auto-load NIFTY 50 on equity page with chart + analysis
   $('search-input').value = 'NIFTY 50';
+  try { await analyzeStock(); } catch(e) { console.warn('Auto-analyze failed:', e); }
 
   startRefresh();
   toast('KHABAR Terminal Ready ✓');

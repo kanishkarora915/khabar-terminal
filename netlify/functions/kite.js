@@ -107,7 +107,7 @@ async function buildOptionChain(apiKey, token, symbol, expiry) {
   if (!expiryOpts.length) return null;
 
   // Get spot price first
-  const spotSym = symbol === 'NIFTY' ? 'NSE:NIFTY 50' : symbol === 'BANKNIFTY' ? 'NSE:NIFTY BANK' : symbol === 'FINNIFTY' ? 'NSE:NIFTY FIN SERVICE' : `NSE:${symbol}`;
+  const spotSym = symbol === 'NIFTY' ? 'NSE:NIFTY 50' : symbol === 'BANKNIFTY' ? 'NSE:NIFTY BANK' : symbol === 'FINNIFTY' ? 'NSE:NIFTY FIN SERVICE' : symbol === 'MIDCPNIFTY' ? 'NSE:NIFTY MID SELECT' : `NSE:${symbol}`;
   const spotQuote = await kiteFetch(`/quote/ltp?i=${encodeURIComponent(spotSym)}`, apiKey, token);
   const spot = spotQuote?.data?.[spotSym]?.last_price || 0;
 
@@ -124,14 +124,14 @@ async function buildOptionChain(apiKey, token, symbol, expiry) {
   // Filter instruments to near strikes only
   const nearOpts = expiryOpts.filter(o => nearStrikes.includes(parseFloat(o.strike)));
 
-  // Fetch quotes in batches (max ~200 per call to be safe)
+  // Fetch quotes in batches — Kite API needs multiple i= params
   const allQuotes = {};
-  const batchSize = 200;
+  const batchSize = 40; // Kite allows ~40-50 instruments per call safely
   for (let i = 0; i < nearOpts.length; i += batchSize) {
     const batch = nearOpts.slice(i, i + batchSize);
-    const symbols = batch.map(o => `NFO:${o.tradingsymbol}`).join(',');
+    const queryStr = batch.map(o => `i=${encodeURIComponent(`NFO:${o.tradingsymbol}`)}`).join('&');
     try {
-      const qr = await kiteFetch(`/quote?i=${encodeURIComponent(symbols)}`, apiKey, token);
+      const qr = await kiteFetch(`/quote?${queryStr}`, apiKey, token);
       if (qr?.data) Object.assign(allQuotes, qr.data);
     } catch (e) { /* continue with partial data */ }
   }
@@ -154,9 +154,9 @@ async function buildOptionChain(apiKey, token, symbol, expiry) {
     if (ceQuote) {
       row.CE = {
         strikePrice: strike, expiryDate: fmtSelectedExpiry, underlying: symbol, underlyingValue: spot,
-        openInterest: ceQuote.oi || 0, changeinOpenInterest: ceQuote.oi_day_high ? ceQuote.oi - (ceQuote.oi_day_low || 0) : 0,
+        openInterest: ceQuote.oi || 0, changeinOpenInterest: ceQuote.oi - (ceQuote.oi_day_low || ceQuote.oi),
         pchangeinOpenInterest: 0, totalTradedVolume: ceQuote.volume || 0,
-        impliedVolatility: 0, // Kite doesn't provide IV directly
+        impliedVolatility: 0,
         lastPrice: ceQuote.last_price || 0, change: ceQuote.net_change || 0,
         pChange: ceQuote.ohlc?.close ? ((ceQuote.last_price - ceQuote.ohlc.close) / ceQuote.ohlc.close * 100) : 0,
         totalBuyQuantity: ceQuote.buy_quantity || 0, totalSellQuantity: ceQuote.sell_quantity || 0,
@@ -168,7 +168,7 @@ async function buildOptionChain(apiKey, token, symbol, expiry) {
     if (peQuote) {
       row.PE = {
         strikePrice: strike, expiryDate: fmtSelectedExpiry, underlying: symbol, underlyingValue: spot,
-        openInterest: peQuote.oi || 0, changeinOpenInterest: peQuote.oi_day_high ? peQuote.oi - (peQuote.oi_day_low || 0) : 0,
+        openInterest: peQuote.oi || 0, changeinOpenInterest: peQuote.oi - (peQuote.oi_day_low || peQuote.oi),
         pchangeinOpenInterest: 0, totalTradedVolume: peQuote.volume || 0,
         impliedVolatility: 0,
         lastPrice: peQuote.last_price || 0, change: peQuote.net_change || 0,
@@ -259,16 +259,20 @@ exports.handler = async (event) => {
         break;
       }
       case 'indices':
-        result = await kiteFetch('/quote?i=NSE%3ANIFTY+50%2CNSE%3ANIFTY+BANK%2CNSE%3ANIFTY+FIN+SERVICE%2CNSE%3ANIFTY+IT%2CNSE%3ANIFTY+MIDCAP+100%2CBSE%3ASENSEX', api_key, access_token);
+        result = await kiteFetch('/quote?i=NSE:NIFTY+50&i=NSE:NIFTY+BANK&i=NSE:NIFTY+FIN+SERVICE&i=NSE:NIFTY+IT&i=NSE:NIFTY+MIDCAP+100&i=BSE:SENSEX', api_key, access_token);
         break;
       case 'option-chain': {
         // BUILD OPTION CHAIN FROM KITE DATA
-        const ocData = await buildOptionChain(api_key, access_token, body.symbol, body.expiry);
-        if (ocData) {
-          cache[ck] = { data: ocData, ts: Date.now() };
-          return { statusCode: 200, headers: H, body: JSON.stringify(ocData) };
+        try {
+          const ocData = await buildOptionChain(api_key, access_token, body.symbol, body.expiry);
+          if (ocData) {
+            cache[ck] = { data: ocData, ts: Date.now() };
+            return { statusCode: 200, headers: H, body: JSON.stringify(ocData) };
+          }
+          return { statusCode: 404, headers: H, body: JSON.stringify({ error: `No options found for ${body.symbol}. Check if symbol is correct.` }) };
+        } catch (ocErr) {
+          return { statusCode: 500, headers: H, body: JSON.stringify({ error: `Option chain build failed: ${ocErr.message}` }) };
         }
-        return { statusCode: 404, headers: H, body: JSON.stringify({ error: `No options found for ${body.symbol}` }) };
       }
       case 'holdings':
         result = await kiteFetch('/portfolio/holdings', api_key, access_token);
