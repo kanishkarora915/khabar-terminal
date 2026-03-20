@@ -34,8 +34,8 @@ body{background:var(--bg);color:var(--t);font-family:var(--f2);font-size:12px;ov
 .g12{display:grid;grid-template-columns:1fr 2.2fr;gap:12px;margin-bottom:12px}
 .pn{background:var(--s1);border:1px solid var(--bd);border-radius:10px;padding:14px;overflow:hidden}
 .ph{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
-.pt{font-family:var(--f1);font-size:10px;font-weight:600;letter-spacing:2px;color:var(--m);text-transform:uppercase}
-.badge{font-size:9px;padding:3px 8px;border-radius:12px;font-weight:700;letter-spacing:.5px}
+.pt{font-family:var(--f1);font-size:11px;font-weight:700;letter-spacing:2px;color:var(--m);text-transform:uppercase}
+.badge{font-size:10px;padding:3px 9px;border-radius:12px;font-weight:700;letter-spacing:.5px}
 .bg{background:rgba(0,230,118,.12);color:var(--g);border:1px solid rgba(0,230,118,.3)}
 .br{background:rgba(255,51,85,.12);color:var(--r);border:1px solid rgba(255,51,85,.3)}
 .by{background:rgba(255,193,7,.12);color:var(--y);border:1px solid rgba(255,193,7,.3)}
@@ -59,19 +59,19 @@ body{background:var(--bg);color:var(--t);font-family:var(--f2);font-size:12px;ov
 .stock-hdr{background:var(--s1);border:1px solid var(--bd);border-radius:10px;padding:16px 20px;margin-bottom:12px;display:none}
 .sh-price{font-family:var(--f1);font-size:38px;font-weight:800}
 .sh-cards{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-top:12px}
-.shc{background:var(--s2);border:1px solid var(--bd);border-radius:6px;padding:8px 10px}
-.shc-l{font-size:8px;color:var(--m);letter-spacing:1px;text-transform:uppercase;margin-bottom:3px}
-.shc-v{font-family:var(--f1);font-size:14px;font-weight:700}
+.shc{background:var(--s2);border:1px solid var(--bd);border-radius:6px;padding:10px 12px}
+.shc-l{font-size:10px;color:var(--m);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;font-weight:600}
+.shc-v{font-family:var(--f1);font-size:15px;font-weight:700}
 .sig-banner{border-radius:10px;padding:14px 20px;margin-bottom:12px;display:none}
 .sig-banner.buy{background:linear-gradient(135deg,rgba(0,230,118,.07),rgba(0,204,255,.03));border:1px solid rgba(0,230,118,.3)}
 .sig-banner.sell{background:linear-gradient(135deg,rgba(255,51,85,.07),rgba(255,107,53,.03));border:1px solid rgba(255,51,85,.3)}
 .sig-banner.hold{background:linear-gradient(135deg,rgba(255,193,7,.05),rgba(179,136,255,.03));border:1px solid rgba(255,193,7,.3)}
-.tbl{width:100%;border-collapse:collapse;font-size:11px}
-.tbl td,.tbl th{padding:6px 8px;text-align:left;border-bottom:1px solid var(--bd)}
-.tbl th{font-size:9px;color:var(--m);letter-spacing:1px;text-transform:uppercase}
-.oc-table{width:100%;border-collapse:collapse;font-size:10px}
-.oc-table td,.oc-table th{padding:5px 6px;text-align:center;border-bottom:1px solid var(--bd)}
-.oc-table th{font-size:8px;color:var(--m);letter-spacing:1px;background:var(--s2)}
+.tbl{width:100%;border-collapse:collapse;font-size:12px}
+.tbl td,.tbl th{padding:8px 10px;text-align:left;border-bottom:1px solid var(--bd)}
+.tbl th{font-size:10px;color:var(--m);letter-spacing:1px;text-transform:uppercase;font-weight:700}
+.oc-table{width:100%;border-collapse:collapse;font-size:12px}
+.oc-table td,.oc-table th{padding:7px 8px;text-align:center;border-bottom:1px solid var(--bd)}
+.oc-table th{font-size:10px;color:var(--m);letter-spacing:1px;background:var(--s2);font-weight:700}
 .oc-table tr:hover td{background:rgba(255,255,255,.02)}
 .oc-atm{background:rgba(255,193,7,.08)!important;font-weight:700}
 @keyframes oi-flash{0%,100%{background:transparent}50%{background:rgba(255,193,7,.25)}}
@@ -84,17 +84,17 @@ body{background:var(--bg);color:var(--t);font-family:var(--f2);font-size:12px;ov
 .oi-popup-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:9998}
 .oi-popup h3{margin:0 0 12px;color:var(--a);font-size:14px;letter-spacing:1px}
 .oi-popup .close-btn{position:absolute;top:10px;right:14px;color:var(--m);cursor:pointer;font-size:18px}
-.oi-detail-row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--bd);font-size:11px}
+.oi-detail-row{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--bd);font-size:13px}
 .oi-detail-row .label{color:var(--m)}
-.oi-verdict{margin-top:12px;padding:10px;border-radius:8px;text-align:center;font-weight:700;font-size:12px;letter-spacing:1px}
+.oi-verdict{margin-top:12px;padding:12px;border-radius:8px;text-align:center;font-weight:700;font-size:13px;letter-spacing:1px}
 .sb-panel{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
 .sb-card{background:var(--s1);border-radius:8px;padding:10px;text-align:center;border-left:3px solid var(--bd)}
-.sb-card .sb-pct{font-size:20px;font-weight:700;font-family:var(--f1)}
-.sb-card .sb-lbl{font-size:8px;color:var(--m);letter-spacing:1px;margin-top:3px}
+.sb-card .sb-pct{font-size:22px;font-weight:700;font-family:var(--f1)}
+.sb-card .sb-lbl{font-size:10px;color:var(--m);letter-spacing:1px;margin-top:3px;font-weight:600}
 .shg{display:grid;grid-template-columns:repeat(4,1fr);gap:5px}
-.sheat{padding:8px 4px;border-radius:6px;text-align:center;font-size:9px;font-weight:700;cursor:default}
-.ai-box{background:var(--bg);border-left:2px solid var(--a);border-radius:6px;padding:12px;font-size:11px;line-height:1.8;min-height:70px}
-.si{display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:var(--bg);border-radius:5px;border-left:3px solid var(--m);font-size:10px;margin-bottom:4px}
+.sheat{padding:10px 6px;border-radius:6px;text-align:center;font-size:11px;font-weight:700;cursor:default}
+.ai-box{background:var(--bg);border-left:2px solid var(--a);border-radius:6px;padding:14px;font-size:12px;line-height:1.8;min-height:70px}
+.si{display:flex;align-items:center;justify-content:space-between;padding:9px 12px;background:var(--bg);border-radius:5px;border-left:3px solid var(--m);font-size:12px;margin-bottom:5px}
 .si.buy{border-left-color:var(--g)}.si.sell{border-left-color:var(--r)}.si.hold{border-left-color:var(--y)}
 .toast{position:fixed;bottom:16px;right:16px;background:var(--s1);border:1px solid var(--bd);padding:10px 16px;border-radius:8px;font-size:11px;z-index:9999;transform:translateY(60px);opacity:0;transition:all .3s;max-width:360px}
 .toast.show{transform:translateY(0);opacity:1}
@@ -104,14 +104,14 @@ body{background:var(--bg);color:var(--t);font-family:var(--f2);font-size:12px;ov
 .news-popup .np-title{font-family:var(--f1);font-size:13px;font-weight:700;margin-bottom:4px;line-height:1.5}
 .news-popup .np-src{font-size:9px;color:var(--r);letter-spacing:1px;animation:pulse-red 1.5s ease-in-out infinite}
 @keyframes pulse-red{0%,100%{opacity:1}50%{opacity:.5}}
-.news-item{padding:10px 0;border-bottom:1px solid var(--bd);font-size:10px;line-height:1.6;cursor:pointer;transition:background .2s}
+.news-item{padding:10px 0;border-bottom:1px solid var(--bd);font-size:12px;line-height:1.6;cursor:pointer;transition:background .2s}
 .news-item:hover{background:rgba(0,204,255,.03);padding-left:4px}
 .news-item:last-child{border-bottom:none}
 .news-hi{border-left:3px solid var(--r);padding-left:10px;background:rgba(255,51,85,.03);animation:news-glow 3s ease-in-out}
 @keyframes news-glow{0%{background:rgba(255,51,85,.15)}100%{background:rgba(255,51,85,.03)}}
 .news-new{border-left:3px solid var(--a);padding-left:10px;animation:news-new-glow 2s ease-in-out}
 @keyframes news-new-glow{0%{background:rgba(0,204,255,.15)}100%{background:transparent}}
-.news-src{font-size:8px;padding:2px 6px;border-radius:3px;background:rgba(0,204,255,.1);color:var(--a);margin-right:4px}
+.news-src{font-size:9px;padding:3px 7px;border-radius:3px;background:rgba(0,204,255,.1);color:var(--a);margin-right:4px;font-weight:600}
 .news-src-finnhub{background:rgba(255,165,0,.15);color:#ffa500}
 .news-src-global{background:rgba(156,39,176,.15);color:#ce93d8}
 .news-badge-new{font-size:7px;padding:1px 5px;border-radius:3px;background:var(--r);color:white;font-weight:700;letter-spacing:.5px;margin-left:4px;animation:pulse-red 1.5s ease-in-out infinite}
@@ -127,8 +127,8 @@ body{background:var(--bg);color:var(--t);font-family:var(--f2);font-size:12px;ov
 .news-filter-btn.active,.news-filter-btn:hover{border-color:var(--a);color:var(--a);background:rgba(0,204,255,.08)}
 .spin{display:inline-block;width:12px;height:12px;border:2px solid var(--bd);border-top-color:var(--a);border-radius:50%;animation:sp .6s linear infinite;vertical-align:middle}
 @keyframes sp{to{transform:rotate(360deg)}}
-.oc-summary-card{text-align:center}.oc-big{font-family:var(--f1);font-size:26px;font-weight:800}
-.strike-item{display:flex;justify-content:space-between;padding:6px 10px;background:var(--bg);border-radius:5px;margin-bottom:4px;font-size:10px}
+.oc-summary-card{text-align:center}.oc-big{font-family:var(--f1);font-size:28px;font-weight:800}
+.strike-item{display:flex;justify-content:space-between;padding:8px 12px;background:var(--bg);border-radius:5px;margin-bottom:5px;font-size:12px}
 @media(max-width:1200px){.g21,.g12,.g2{grid-template-columns:1fr}.g3,.g4{grid-template-columns:1fr 1fr}.sh-cards{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:768px){.g3,.g4{grid-template-columns:1fr}.sh-cards{grid-template-columns:repeat(2,1fr)}.hdr{flex-wrap:wrap}.nav{margin-left:0}}
 /* PULSE */
@@ -409,30 +409,30 @@ body{background:var(--bg);color:var(--t);font-family:var(--f2);font-size:12px;ov
 
   <!-- KEY METRICS -->
   <div class="g4" id="fno-metrics">
-    <div class="pn oc-summary-card"><div class="pt" style="margin-bottom:6px">SPOT PRICE</div><div class="oc-big" id="fno-spot">—</div><div style="font-size:10px;color:var(--m);margin-top:3px" id="fno-spot-chg">—</div></div>
-    <div class="pn oc-summary-card"><div class="pt" style="margin-bottom:6px">PUT-CALL RATIO</div><div class="oc-big" id="fno-pcr" style="color:var(--y)">—</div><div style="font-size:10px;color:var(--m);margin-top:3px" id="fno-pcr-st">—</div></div>
-    <div class="pn oc-summary-card"><div class="pt" style="margin-bottom:6px">MAX PAIN</div><div class="oc-big" id="fno-pain" style="color:var(--p)">—</div><div style="font-size:10px;color:var(--m);margin-top:3px">Options expire here</div></div>
-    <div class="pn oc-summary-card"><div class="pt" style="margin-bottom:6px">🎯 MARKET SIGNAL</div><div class="oc-big" id="fno-signal">—</div><div style="font-size:10px;color:var(--m);margin-top:3px" id="fno-signal-desc">—</div></div>
+    <div class="pn oc-summary-card"><div class="pt" style="margin-bottom:6px">SPOT PRICE</div><div class="oc-big" id="fno-spot">—</div><div style="font-size:13px;color:var(--m);margin-top:4px" id="fno-spot-chg">—</div></div>
+    <div class="pn oc-summary-card"><div class="pt" style="margin-bottom:6px">PUT-CALL RATIO</div><div class="oc-big" id="fno-pcr" style="color:var(--y)">—</div><div style="font-size:13px;color:var(--m);margin-top:4px" id="fno-pcr-st">—</div></div>
+    <div class="pn oc-summary-card"><div class="pt" style="margin-bottom:6px">MAX PAIN</div><div class="oc-big" id="fno-pain" style="color:var(--p)">—</div><div style="font-size:13px;color:var(--m);margin-top:4px">Options expire here</div></div>
+    <div class="pn oc-summary-card"><div class="pt" style="margin-bottom:6px">🎯 MARKET SIGNAL</div><div class="oc-big" id="fno-signal">—</div><div style="font-size:13px;color:var(--m);margin-top:4px" id="fno-signal-desc">—</div></div>
   </div>
 
   <!-- FUTURES DATA -->
   <div class="pn" style="margin-bottom:12px">
     <div class="ph"><div class="pt">📊 FUTURES DATA</div><span class="badge ba">LIVE</span></div>
     <div id="futures-panel" style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;text-align:center">
-      <div><div style="font-size:9px;color:var(--m)">SPOT</div><div style="font-family:var(--f1);font-size:16px;font-weight:700" id="fut-spot">—</div></div>
-      <div><div style="font-size:9px;color:var(--m)">TOTAL CALL OI</div><div style="font-family:var(--f1);font-size:16px;font-weight:700;color:var(--g)" id="fut-call-oi">—</div></div>
-      <div><div style="font-size:9px;color:var(--m)">TOTAL PUT OI</div><div style="font-family:var(--f1);font-size:16px;font-weight:700;color:var(--r)" id="fut-put-oi">—</div></div>
-      <div><div style="font-size:9px;color:var(--m)">CALL/PUT OI RATIO</div><div style="font-family:var(--f1);font-size:16px;font-weight:700;color:var(--y)" id="fut-ratio">—</div></div>
-      <div><div style="font-size:9px;color:var(--m)">TOTAL VOLUME</div><div style="font-family:var(--f1);font-size:16px;font-weight:700;color:var(--a)" id="fut-vol">—</div></div>
+      <div><div style="font-size:11px;color:var(--m);font-weight:600;letter-spacing:1px">SPOT</div><div style="font-family:var(--f1);font-size:18px;font-weight:700;margin-top:2px" id="fut-spot">—</div></div>
+      <div><div style="font-size:11px;color:var(--m);font-weight:600;letter-spacing:1px">TOTAL CALL OI</div><div style="font-family:var(--f1);font-size:18px;font-weight:700;color:var(--g);margin-top:2px" id="fut-call-oi">—</div></div>
+      <div><div style="font-size:11px;color:var(--m);font-weight:600;letter-spacing:1px">TOTAL PUT OI</div><div style="font-family:var(--f1);font-size:18px;font-weight:700;color:var(--r);margin-top:2px" id="fut-put-oi">—</div></div>
+      <div><div style="font-size:11px;color:var(--m);font-weight:600;letter-spacing:1px">CALL/PUT OI RATIO</div><div style="font-family:var(--f1);font-size:18px;font-weight:700;color:var(--y);margin-top:2px" id="fut-ratio">—</div></div>
+      <div><div style="font-size:11px;color:var(--m);font-weight:600;letter-spacing:1px">TOTAL VOLUME</div><div style="font-family:var(--f1);font-size:18px;font-weight:700;color:var(--a);margin-top:2px" id="fut-vol">—</div></div>
     </div>
   </div>
 
   <!-- OI ANALYSIS -->
   <div class="g4" style="margin-bottom:12px">
-    <div class="pn"><div class="ph"><div class="pt">🟢 MAX CALL OI</div><span class="badge br">RESISTANCE</span></div><div class="oc-big dn" id="max-call-oi-strike">—</div><div style="font-size:10px;color:var(--m);margin-top:3px" id="max-call-oi-val">—</div></div>
-    <div class="pn"><div class="ph"><div class="pt">🔴 MAX PUT OI</div><span class="badge bg">SUPPORT</span></div><div class="oc-big up" id="max-put-oi-strike">—</div><div style="font-size:10px;color:var(--m);margin-top:3px" id="max-put-oi-val">—</div></div>
-    <div class="pn"><div class="ph"><div class="pt">📈 MAX CALL OI CHG</div></div><div class="oc-big" id="max-call-chg-strike" style="color:var(--a)">—</div><div style="font-size:10px;color:var(--m);margin-top:3px" id="max-call-chg-val">—</div></div>
-    <div class="pn"><div class="ph"><div class="pt">📉 MAX PUT OI CHG</div></div><div class="oc-big" id="max-put-chg-strike" style="color:var(--a)">—</div><div style="font-size:10px;color:var(--m);margin-top:3px" id="max-put-chg-val">—</div></div>
+    <div class="pn"><div class="ph"><div class="pt">🟢 MAX CALL OI</div><span class="badge br">RESISTANCE</span></div><div class="oc-big dn" id="max-call-oi-strike">—</div><div style="font-size:13px;color:var(--m);margin-top:4px;font-weight:600" id="max-call-oi-val">—</div></div>
+    <div class="pn"><div class="ph"><div class="pt">🔴 MAX PUT OI</div><span class="badge bg">SUPPORT</span></div><div class="oc-big up" id="max-put-oi-strike">—</div><div style="font-size:13px;color:var(--m);margin-top:4px;font-weight:600" id="max-put-oi-val">—</div></div>
+    <div class="pn"><div class="ph"><div class="pt">📈 MAX CALL OI CHG</div></div><div class="oc-big" id="max-call-chg-strike" style="color:var(--a)">—</div><div style="font-size:13px;color:var(--m);margin-top:4px;font-weight:600" id="max-call-chg-val">—</div></div>
+    <div class="pn"><div class="ph"><div class="pt">📉 MAX PUT OI CHG</div></div><div class="oc-big" id="max-put-chg-strike" style="color:var(--a)">—</div><div style="font-size:13px;color:var(--m);margin-top:4px;font-weight:600" id="max-put-chg-val">—</div></div>
   </div>
 
   <!-- OPTION CHAIN TABLE -->
@@ -1575,7 +1575,7 @@ function updateFibTable(a) {
     ['🛑 Stop Loss', `<b class="dn">${fmt(a.sl)}</b>`, 'ATR 2x', '<span class="dn">EXIT BELOW</span>'],
   ];
   $('fib-table').innerHTML = '<tr><th>Level</th><th>Price</th><th>Type</th><th>Status</th></tr>' +
-    rows.map(r => `<tr><td>${r[0]}</td><td style="color:var(--y)">${r[1]}</td><td style="color:var(--m);font-size:9px">${r[2]}</td><td>${r[3]}</td></tr>`).join('');
+    rows.map(r => `<tr><td style="font-weight:600">${r[0]}</td><td style="color:var(--y);font-weight:700;font-size:13px">${r[1]}</td><td style="color:var(--m);font-size:11px">${r[2]}</td><td style="font-size:12px">${r[3]}</td></tr>`).join('');
 }
 
 // ═══════════════════════════════════════════════════════
