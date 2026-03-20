@@ -587,9 +587,9 @@ async function kiteApi(action, params = {}) {
       body: JSON.stringify({ action, api_key: APP.kite.api_key, access_token: APP.kite.access_token, ...params })
     });
     if (r.status === 401) { onKiteExpired(); return null; }
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const data = await r.json();
     if (data?.expired || data?._tokenExpired) { onKiteExpired(); return null; }
+    if (data?.error) { console.warn(`KITE ${action} error:`, data.error); }
     if (!APP.connected) { APP.connected = true; $('conn-dot').className = 'dot dg'; $('conn-txt').textContent = 'KITE LIVE'; }
     return data;
   } catch(e) {
@@ -1191,37 +1191,36 @@ async function loadFnO(index, btn) {
 
   // Try Kite API first (reliable, no IP blocking), then NSE as fallback
   let data = null;
+  let lastError = '';
   if (APP.kite.active) {
-    try {
-      toast(`Fetching ${index} via Kite API...`, 'info');
-      data = await kiteApi('option-chain', { symbol: index });
-    } catch(e) { console.warn('Kite option-chain failed:', e); }
+    toast(`Fetching ${index} via Kite API...`, 'info');
+    data = await kiteApi('option-chain', { symbol: index });
+    if (data?.error) { lastError = data.error; console.warn('Kite OC error:', data.error, data._debug); data = null; }
+    if (data?._debug) console.log('Kite OC debug:', data._debug);
   }
 
-  if (!data?.records?.data) {
+  if (!data?.records?.data?.length) {
     // Kite unavailable or failed — try NSE
     toast(`Trying NSE for ${index}...`, 'info');
     data = await nseApi('option-chain', { symbol: index, type: 'indices' });
   }
 
-  if (!data?.records?.data) {
-    // NSE also failed — retry once with fresh cookies
-    toast(`Retrying ${index} option chain...`, 'info');
+  if (!data?.records?.data?.length) {
+    // NSE also failed — retry once
+    toast(`Retrying ${index}...`, 'info');
     await new Promise(r => setTimeout(r, 1500));
     data = await nseApi('option-chain', { symbol: index, type: 'indices' });
   }
 
-  if (!data?.records?.data) {
-    // Still failed — show error with details
-    const errMsg = data?.error || 'Data source unavailable';
-    toast(`${index}: Option chain failed — ${errMsg}`, 'err');
+  if (!data?.records?.data?.length) {
+    const errMsg = lastError || data?.error || 'All sources failed';
+    toast(`${index}: ${errMsg}`, 'err');
 
-    // Show helpful message in the UI
     $('oc-body').innerHTML = `<tr><td colspan="11" style="color:var(--r);text-align:center;padding:20px">
       <b>Option Chain Loading Failed</b><br>
-      <span style="color:var(--m);font-size:10px">Error: ${errMsg}</span><br><br>
-      <span style="color:var(--m);font-size:10px">${APP.kite.active ? 'Kite API returned no data. Check if market is open or try REFRESH.' : 'Login with Zerodha API key for reliable real-time option chain data.<br>NSE blocks cloud server requests — Kite API bypasses this.'}<br>
-      Try clicking <b>REFRESH</b> button.</span>
+      <span style="color:var(--m);font-size:10px">${errMsg}</span><br><br>
+      <span style="color:var(--m);font-size:10px">${APP.kite.active ? 'Market may be closed. Option data is available during trading hours (9:15 AM - 3:30 PM).<br>Click REFRESH during market hours.' : 'Login with Zerodha for reliable option chain data.'}<br>
+      <b>↻ REFRESH</b></span>
     </td></tr>`;
     return;
   }

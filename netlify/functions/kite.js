@@ -21,11 +21,11 @@ function kiteFetch(path, apiKey, token, method = 'GET', postData = null) {
           if (parsed.status === 'error' && (parsed.error_type === 'TokenException' || parsed.error_type === 'InputException')) {
             resolve({ _tokenExpired: true, error: parsed.message, error_type: parsed.error_type });
           } else { resolve(parsed); }
-        } catch (e) { resolve({ error: data.slice(0, 200) }); }
+        } catch (e) { resolve({ error: data.slice(0, 500) }); }
       });
     });
     req.on('error', reject);
-    req.setTimeout(15000, () => { req.destroy(); reject(new Error('Kite timeout')); });
+    req.setTimeout(20000, () => { req.destroy(); reject(new Error('Kite API timeout')); });
     if (postData) req.write(postData);
     req.end();
   });
@@ -44,7 +44,7 @@ function kiteFetchRaw(path, apiKey, token) {
       res.on('end', () => resolve(data));
     });
     req.on('error', reject);
-    req.setTimeout(20000, () => { req.destroy(); reject(new Error('Timeout')); });
+    req.setTimeout(25000, () => { req.destroy(); reject(new Error('Instruments CSV timeout')); });
     req.end();
   });
 }
@@ -64,37 +64,54 @@ function parseCSV(csv) {
 }
 
 async function getInstruments(apiKey, token) {
-  // Cache instruments for 1 hour (they rarely change)
   if (instrumentsCache.data && Date.now() - instrumentsCache.ts < 3600000) return instrumentsCache.data;
   const csv = await kiteFetchRaw('/instruments/NFO', apiKey, token);
+  if (!csv || csv.length < 100) throw new Error(`Instruments CSV too small: ${csv.length} bytes. First 200: ${(csv||'').slice(0,200)}`);
   const instruments = parseCSV(csv);
+  if (!instruments.length) throw new Error('Parsed 0 instruments from CSV');
   instrumentsCache = { data: instruments, ts: Date.now() };
   return instruments;
 }
 
-async function buildOptionChain(apiKey, token, symbol, expiry) {
-  const instruments = await getInstruments(apiKey, token);
+// Get spot symbol for an index
+function getSpotSymbol(symbol) {
+  const map = {
+    'NIFTY': 'NSE:NIFTY 50',
+    'BANKNIFTY': 'NSE:NIFTY BANK',
+    'FINNIFTY': 'NSE:NIFTY FIN SERVICE',
+    'MIDCPNIFTY': 'NSE:NIFTY MID SELECT',
+    'SENSEX': 'BSE:SENSEX'
+  };
+  return map[symbol] || `NSE:${symbol}`;
+}
 
-  // Map symbol names: NIFTY -> NIFTY, BANKNIFTY -> BANKNIFTY
+async function buildOptionChain(apiKey, token, symbol, expiry) {
+  const t0 = Date.now();
+  const instruments = await getInstruments(apiKey, token);
+  const t1 = Date.now();
+
+  // Filter for this symbol's options
   const opts = instruments.filter(i =>
     i.name === symbol &&
     (i.instrument_type === 'CE' || i.instrument_type === 'PE') &&
     i.segment === 'NFO-OPT'
   );
 
-  if (!opts.length) return null;
+  if (!opts.length) {
+    // Debug: check what names exist
+    const names = [...new Set(instruments.filter(i => i.segment === 'NFO-OPT').map(i => i.name))].sort();
+    throw new Error(`No options for "${symbol}". Available index names: ${names.slice(0, 20).join(', ')}`);
+  }
 
   // Get unique expiry dates and sort
   const expiries = [...new Set(opts.map(o => o.expiry))].sort((a, b) => new Date(a) - new Date(b));
 
-  // Handle expiry param in various formats (e.g., "27-Mar-2026" from frontend or "2026-03-27" from CSV)
+  // Handle expiry param in various formats
   let selectedExpiry = expiries[0];
   if (expiry) {
-    // Try direct match first
     if (expiries.includes(expiry)) {
       selectedExpiry = expiry;
     } else {
-      // Try parsing the formatted date and matching
       const parsed = new Date(expiry);
       if (!isNaN(parsed)) {
         const match = expiries.find(e => new Date(e).toDateString() === parsed.toDateString());
@@ -103,49 +120,53 @@ async function buildOptionChain(apiKey, token, symbol, expiry) {
     }
   }
   const expiryOpts = opts.filter(o => o.expiry === selectedExpiry);
+  if (!expiryOpts.length) throw new Error(`No options for expiry ${selectedExpiry}`);
 
-  if (!expiryOpts.length) return null;
-
-  // Get spot price first
-  const spotSym = symbol === 'NIFTY' ? 'NSE:NIFTY 50' : symbol === 'BANKNIFTY' ? 'NSE:NIFTY BANK' : symbol === 'FINNIFTY' ? 'NSE:NIFTY FIN SERVICE' : symbol === 'MIDCPNIFTY' ? 'NSE:NIFTY MID SELECT' : `NSE:${symbol}`;
+  // Get spot price
+  const spotSym = getSpotSymbol(symbol);
   const spotQuote = await kiteFetch(`/quote/ltp?i=${encodeURIComponent(spotSym)}`, apiKey, token);
   const spot = spotQuote?.data?.[spotSym]?.last_price || 0;
+  const t2 = Date.now();
 
-  // Get strikes near ATM (±20 strikes to reduce API calls)
+  // Get strikes near ATM (±15 strikes)
   const strikes = [...new Set(expiryOpts.map(o => parseFloat(o.strike)))].sort((a, b) => a - b);
   let nearStrikes = strikes;
-  if (spot > 0 && strikes.length > 40) {
+  if (spot > 0 && strikes.length > 30) {
     const atmIdx = strikes.reduce((best, s, i) => Math.abs(s - spot) < Math.abs(strikes[best] - spot) ? i : best, 0);
-    const start = Math.max(0, atmIdx - 20);
-    const end = Math.min(strikes.length, atmIdx + 21);
+    const start = Math.max(0, atmIdx - 15);
+    const end = Math.min(strikes.length, atmIdx + 16);
     nearStrikes = strikes.slice(start, end);
   }
 
   // Filter instruments to near strikes only
   const nearOpts = expiryOpts.filter(o => nearStrikes.includes(parseFloat(o.strike)));
 
-  // Fetch quotes in batches — Kite API needs multiple i= params
+  // Fetch quotes in batches — Kite API accepts multiple i= params
   const allQuotes = {};
-  const batchSize = 40; // Kite allows ~40-50 instruments per call safely
+  const batchSize = 30;
   for (let i = 0; i < nearOpts.length; i += batchSize) {
     const batch = nearOpts.slice(i, i + batchSize);
-    const queryStr = batch.map(o => `i=${encodeURIComponent(`NFO:${o.tradingsymbol}`)}`).join('&');
+    const queryStr = batch.map(o => `i=NFO:${o.tradingsymbol}`).join('&');
     try {
       const qr = await kiteFetch(`/quote?${queryStr}`, apiKey, token);
       if (qr?.data) Object.assign(allQuotes, qr.data);
-    } catch (e) { /* continue with partial data */ }
+    } catch (e) { /* continue */ }
   }
+  const t3 = Date.now();
 
-  // Format expiry for NSE-compatible display (e.g., "27-Mar-2026")
-  function fmtExpiry(e) { const d = new Date(e); return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '-'); }
+  // Format expiry for NSE-compatible display
+  function fmtExpiry(e) {
+    const d = new Date(e + 'T00:00:00Z');
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return `${String(d.getUTCDate()).padStart(2,'0')}-${months[d.getUTCMonth()]}-${d.getUTCFullYear()}`;
+  }
   const fmtSelectedExpiry = fmtExpiry(selectedExpiry);
 
-  // Build option chain in NSE-compatible format
+  // Build option chain
   const chainData = [];
   nearStrikes.forEach(strike => {
     const ceInst = nearOpts.find(o => parseFloat(o.strike) === strike && o.instrument_type === 'CE');
     const peInst = nearOpts.find(o => parseFloat(o.strike) === strike && o.instrument_type === 'PE');
-
     const ceQuote = ceInst ? allQuotes[`NFO:${ceInst.tradingsymbol}`] : null;
     const peQuote = peInst ? allQuotes[`NFO:${peInst.tradingsymbol}`] : null;
 
@@ -154,28 +175,40 @@ async function buildOptionChain(apiKey, token, symbol, expiry) {
     if (ceQuote) {
       row.CE = {
         strikePrice: strike, expiryDate: fmtSelectedExpiry, underlying: symbol, underlyingValue: spot,
-        openInterest: ceQuote.oi || 0, changeinOpenInterest: ceQuote.oi - (ceQuote.oi_day_low || ceQuote.oi),
-        pchangeinOpenInterest: 0, totalTradedVolume: ceQuote.volume || 0,
+        openInterest: ceQuote.oi || 0,
+        changeinOpenInterest: (ceQuote.oi || 0) - (ceQuote.oi_day_low || ceQuote.oi || 0),
+        pchangeinOpenInterest: 0,
+        totalTradedVolume: ceQuote.volume || 0,
         impliedVolatility: 0,
-        lastPrice: ceQuote.last_price || 0, change: ceQuote.net_change || 0,
+        lastPrice: ceQuote.last_price || 0,
+        change: ceQuote.net_change || 0,
         pChange: ceQuote.ohlc?.close ? ((ceQuote.last_price - ceQuote.ohlc.close) / ceQuote.ohlc.close * 100) : 0,
-        totalBuyQuantity: ceQuote.buy_quantity || 0, totalSellQuantity: ceQuote.sell_quantity || 0,
-        bidQty: ceQuote.depth?.buy?.[0]?.quantity || 0, bidprice: ceQuote.depth?.buy?.[0]?.price || 0,
-        askQty: ceQuote.depth?.sell?.[0]?.quantity || 0, askPrice: ceQuote.depth?.sell?.[0]?.price || 0,
+        totalBuyQuantity: ceQuote.buy_quantity || 0,
+        totalSellQuantity: ceQuote.sell_quantity || 0,
+        bidQty: ceQuote.depth?.buy?.[0]?.quantity || 0,
+        bidprice: ceQuote.depth?.buy?.[0]?.price || 0,
+        askQty: ceQuote.depth?.sell?.[0]?.quantity || 0,
+        askPrice: ceQuote.depth?.sell?.[0]?.price || 0,
       };
     }
 
     if (peQuote) {
       row.PE = {
         strikePrice: strike, expiryDate: fmtSelectedExpiry, underlying: symbol, underlyingValue: spot,
-        openInterest: peQuote.oi || 0, changeinOpenInterest: peQuote.oi - (peQuote.oi_day_low || peQuote.oi),
-        pchangeinOpenInterest: 0, totalTradedVolume: peQuote.volume || 0,
+        openInterest: peQuote.oi || 0,
+        changeinOpenInterest: (peQuote.oi || 0) - (peQuote.oi_day_low || peQuote.oi || 0),
+        pchangeinOpenInterest: 0,
+        totalTradedVolume: peQuote.volume || 0,
         impliedVolatility: 0,
-        lastPrice: peQuote.last_price || 0, change: peQuote.net_change || 0,
+        lastPrice: peQuote.last_price || 0,
+        change: peQuote.net_change || 0,
         pChange: peQuote.ohlc?.close ? ((peQuote.last_price - peQuote.ohlc.close) / peQuote.ohlc.close * 100) : 0,
-        totalBuyQuantity: peQuote.buy_quantity || 0, totalSellQuantity: peQuote.sell_quantity || 0,
-        bidQty: peQuote.depth?.buy?.[0]?.quantity || 0, bidprice: peQuote.depth?.buy?.[0]?.price || 0,
-        askQty: peQuote.depth?.sell?.[0]?.quantity || 0, askPrice: peQuote.depth?.sell?.[0]?.price || 0,
+        totalBuyQuantity: peQuote.buy_quantity || 0,
+        totalSellQuantity: peQuote.sell_quantity || 0,
+        bidQty: peQuote.depth?.buy?.[0]?.quantity || 0,
+        bidprice: peQuote.depth?.buy?.[0]?.price || 0,
+        askQty: peQuote.depth?.sell?.[0]?.quantity || 0,
+        askPrice: peQuote.depth?.sell?.[0]?.price || 0,
       };
     }
 
@@ -191,7 +224,6 @@ async function buildOptionChain(apiKey, token, symbol, expiry) {
     totPutVol += r.PE?.totalTradedVolume || 0;
   });
 
-  // Return in NSE-compatible format
   return {
     records: {
       expiryDates: expiries.map(e => fmtExpiry(e)),
@@ -202,6 +234,11 @@ async function buildOptionChain(apiKey, token, symbol, expiry) {
       data: chainData,
       CE: { totOI: totCallOI, totVol: totCallVol },
       PE: { totOI: totPutOI, totVol: totPutVol },
+    },
+    _debug: {
+      timings: { instruments: t1 - t0, spot: t2 - t1, quotes: t3 - t2, total: Date.now() - t0 },
+      counts: { totalInstruments: instruments.length, symbolOpts: opts.length, expiryOpts: expiryOpts.length, nearOpts: nearOpts.length, quotesReceived: Object.keys(allQuotes).length, chainRows: chainData.length },
+      spot, selectedExpiry, fmtSelectedExpiry
     }
   };
 }
@@ -236,6 +273,48 @@ exports.handler = async (event) => {
       return { statusCode: 200, headers: H, body: JSON.stringify(result) };
     }
 
+    // DEBUG endpoint — test option chain step by step
+    if (action === 'debug-oc') {
+      if (!api_key || !access_token) return { statusCode: 400, headers: H, body: JSON.stringify({ error: 'Need api_key + access_token' }) };
+      const debug = {};
+      try {
+        // Step 1: Test API connection
+        const profile = await kiteFetch('/user/profile', api_key, access_token);
+        debug.step1_profile = profile?.data ? 'OK: ' + profile.data.user_name : 'FAILED: ' + JSON.stringify(profile).slice(0, 200);
+
+        // Step 2: Fetch instruments
+        const t0 = Date.now();
+        const csv = await kiteFetchRaw('/instruments/NFO', api_key, access_token);
+        debug.step2_csv = { bytes: csv.length, timeMs: Date.now() - t0, first200: csv.slice(0, 200) };
+
+        // Step 3: Parse
+        const instruments = parseCSV(csv);
+        debug.step3_parsed = { count: instruments.length, sample: instruments[0] };
+
+        // Step 4: Filter for NIFTY
+        const niftyOpts = instruments.filter(i => i.name === 'NIFTY' && (i.instrument_type === 'CE' || i.instrument_type === 'PE') && i.segment === 'NFO-OPT');
+        debug.step4_nifty = { count: niftyOpts.length, sample: niftyOpts[0], expiries: [...new Set(niftyOpts.map(o => o.expiry))].sort().slice(0, 5) };
+
+        // Step 5: Available index names
+        const indexNames = [...new Set(instruments.filter(i => i.segment === 'NFO-OPT').map(i => i.name))].sort();
+        debug.step5_indexNames = indexNames.slice(0, 30);
+
+        // Step 6: Test spot quote
+        const spotQuote = await kiteFetch('/quote/ltp?i=NSE:NIFTY%2050', api_key, access_token);
+        debug.step6_spot = spotQuote;
+
+        // Step 7: Test a single option quote
+        if (niftyOpts.length) {
+          const testOpt = niftyOpts[0];
+          const testQuote = await kiteFetch(`/quote?i=NFO:${testOpt.tradingsymbol}`, api_key, access_token);
+          debug.step7_optQuote = { symbol: testOpt.tradingsymbol, result: testQuote?.data ? 'OK' : JSON.stringify(testQuote).slice(0, 300) };
+        }
+      } catch (e) {
+        debug.error = e.message;
+      }
+      return { statusCode: 200, headers: H, body: JSON.stringify(debug) };
+    }
+
     if (!api_key || !access_token) return { statusCode: 400, headers: H, body: JSON.stringify({ error: 'api_key and access_token required' }) };
 
     // Cache check
@@ -247,31 +326,39 @@ exports.handler = async (event) => {
 
     let result;
     switch (action) {
-      case 'quote':
-        result = await kiteFetch(`/quote?i=${encodeURIComponent(body.instruments || '')}`, api_key, access_token);
+      case 'quote': {
+        // Support both single and multiple instruments
+        const instruments = body.instruments || '';
+        const syms = instruments.split(',').map(s => s.trim()).filter(Boolean);
+        const queryStr = syms.map(s => `i=${encodeURIComponent(s)}`).join('&');
+        result = await kiteFetch(`/quote?${queryStr}`, api_key, access_token);
         break;
-      case 'ltp':
-        result = await kiteFetch(`/quote/ltp?i=${encodeURIComponent(body.instruments || '')}`, api_key, access_token);
+      }
+      case 'ltp': {
+        const instruments = body.instruments || '';
+        const syms = instruments.split(',').map(s => s.trim()).filter(Boolean);
+        const queryStr = syms.map(s => `i=${encodeURIComponent(s)}`).join('&');
+        result = await kiteFetch(`/quote/ltp?${queryStr}`, api_key, access_token);
         break;
+      }
       case 'history': {
         const { instrument_token, from, to, interval } = body;
         result = await kiteFetch(`/instruments/historical/${instrument_token}/${interval || 'day'}?from=${from}&to=${to}`, api_key, access_token);
         break;
       }
       case 'indices':
-        result = await kiteFetch('/quote?i=NSE:NIFTY+50&i=NSE:NIFTY+BANK&i=NSE:NIFTY+FIN+SERVICE&i=NSE:NIFTY+IT&i=NSE:NIFTY+MIDCAP+100&i=BSE:SENSEX', api_key, access_token);
+        result = await kiteFetch('/quote?i=NSE:NIFTY%2050&i=NSE:NIFTY%20BANK&i=NSE:NIFTY%20FIN%20SERVICE&i=NSE:NIFTY%20IT&i=NSE:NIFTY%20MIDCAP%20100&i=BSE:SENSEX', api_key, access_token);
         break;
       case 'option-chain': {
-        // BUILD OPTION CHAIN FROM KITE DATA
         try {
           const ocData = await buildOptionChain(api_key, access_token, body.symbol, body.expiry);
-          if (ocData) {
+          if (ocData && ocData.records.data.length > 0) {
             cache[ck] = { data: ocData, ts: Date.now() };
             return { statusCode: 200, headers: H, body: JSON.stringify(ocData) };
           }
-          return { statusCode: 404, headers: H, body: JSON.stringify({ error: `No options found for ${body.symbol}. Check if symbol is correct.` }) };
+          return { statusCode: 200, headers: H, body: JSON.stringify({ error: `No option data for ${body.symbol}. Quotes may be empty outside market hours.`, _debug: ocData?._debug }) };
         } catch (ocErr) {
-          return { statusCode: 500, headers: H, body: JSON.stringify({ error: `Option chain build failed: ${ocErr.message}` }) };
+          return { statusCode: 200, headers: H, body: JSON.stringify({ error: `OC build failed: ${ocErr.message}` }) };
         }
       }
       case 'holdings':

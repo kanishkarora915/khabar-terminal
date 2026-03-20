@@ -4,6 +4,10 @@
 
 [functions]
   node_bundler = "esbuild"
+  external_node_modules = ["https"]
+
+[functions."kite"]
+  timeout = 26
 
 [[headers]]
   for = "/*"
