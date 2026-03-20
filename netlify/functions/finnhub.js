@@ -25,6 +25,19 @@ function finnhubFetch(path) {
   });
 }
 
+function httpFetch(hostname, path) {
+  return new Promise((resolve, reject) => {
+    const req = https.request({ hostname, path, method: 'GET', headers: { 'Accept': 'application/json' } }, res => {
+      let data = '';
+      res.on('data', c => data += c);
+      res.on('end', () => { try { resolve(JSON.parse(data)); } catch(e) { resolve(null); } });
+    });
+    req.on('error', reject);
+    req.setTimeout(8000, () => { req.destroy(); reject(new Error('timeout')); });
+    req.end();
+  });
+}
+
 exports.handler = async (event) => {
   const H = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*', 'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Content-Type': 'application/json' };
   if (event.httpMethod === 'OPTIONS') return { statusCode: 200, headers: H, body: '' };
@@ -125,20 +138,30 @@ exports.handler = async (event) => {
           'BTC-USD': 'BINANCE:BTCUSDT', 'ETH-USD': 'BINANCE:ETHUSDT',
           // DXY
           'DX-Y.NYB': 'UUP',
-          // Forex → OANDA quotes
-          'USDINR=X': 'OANDA:USD_INR', 'EURINR=X': 'OANDA:EUR_INR',
-          'GBPINR=X': 'OANDA:GBP_INR', 'JPYINR=X': 'OANDA:JPY_INR',
-          'EURUSD=X': 'OANDA:EUR_USD', 'GBPUSD=X': 'OANDA:GBP_USD',
-          'USDJPY=X': 'OANDA:USD_JPY', 'USDCNY=X': 'OANDA:USD_CNH',
         };
 
-        // Separate into mappable and unsupported symbols
+        // Forex symbols → {base, quote} for free exchange rate API
+        const FOREX_MAP = {
+          'USDINR=X': { base: 'USD', quote: 'INR' },
+          'EURINR=X': { base: 'EUR', quote: 'INR' },
+          'GBPINR=X': { base: 'GBP', quote: 'INR' },
+          'JPYINR=X': { base: 'JPY', quote: 'INR' },
+          'EURUSD=X': { base: 'EUR', quote: 'USD' },
+          'GBPUSD=X': { base: 'GBP', quote: 'USD' },
+          'USDJPY=X': { base: 'USD', quote: 'JPY' },
+          'USDCNY=X': { base: 'USD', quote: 'CNY' },
+        };
+
+        // Separate into quote-based, forex, and unsupported
         const quoteSyms = [];
+        const forexSyms = [];
         const otherSyms = [];
 
         requestedSyms.forEach(sym => {
           if (YAHOO_TO_FINNHUB[sym]) {
             quoteSyms.push(sym);
+          } else if (FOREX_MAP[sym]) {
+            forexSyms.push(sym);
           } else {
             otherSyms.push(sym);
           }
@@ -183,6 +206,44 @@ exports.handler = async (event) => {
             out[yahooSym] = { price: 0, prev: 0, change: 0, error: true };
           }
         });
+
+        // Forex via free exchange rate API
+        if (forexSyms.length > 0) {
+          try {
+            const fxData = await httpFetch('open.er-api.com', '/v6/latest/USD');
+            if (fxData && fxData.rates) {
+              const rates = fxData.rates;
+              forexSyms.forEach(yahooSym => {
+                const fx = FOREX_MAP[yahooSym];
+                if (fx) {
+                  let price = 0;
+                  if (fx.base === 'USD') {
+                    price = rates[fx.quote] || 0;
+                  } else if (fx.quote === 'USD') {
+                    price = rates[fx.base] ? (1 / rates[fx.base]) : 0;
+                  } else {
+                    const usdToQuote = rates[fx.quote] || 0;
+                    const usdToBase = rates[fx.base] || 0;
+                    price = usdToBase ? (usdToQuote / usdToBase) : 0;
+                  }
+                  if (price > 0) {
+                    out[yahooSym] = {
+                      price: +(price.toFixed(price > 100 ? 2 : 4)),
+                      prev: +(price.toFixed(price > 100 ? 2 : 4)),
+                      change: 0,
+                      name: yahooSym,
+                      exchange: 'ExchangeRate'
+                    };
+                  } else {
+                    out[yahooSym] = { price: 0, prev: 0, change: 0, error: true };
+                  }
+                }
+              });
+            }
+          } catch(e) {
+            forexSyms.forEach(s => { out[s] = { price: 0, prev: 0, change: 0, error: true }; });
+          }
+        }
 
         // Mark unsupported symbols
         otherSyms.forEach(s => {
