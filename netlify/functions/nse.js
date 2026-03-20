@@ -193,6 +193,33 @@ exports.handler = async (event) => {
       case 'history':
         result = await yahooFetch(body.symbol, body.range || '1y', body.interval || '1d');
         break;
+      case 'global-data': {
+        // Batch fetch multiple Yahoo Finance symbols in parallel
+        const symbols = body.symbols || [];
+        const range = body.range || '1d';
+        const interval = body.interval || '5m';
+        const results = await Promise.allSettled(
+          symbols.map(sym => yahooFetch(sym, range, interval))
+        );
+        const out = {};
+        symbols.forEach((sym, i) => {
+          const r = results[i];
+          if (r.status === 'fulfilled' && r.value?.data?.chart?.result?.[0]) {
+            const c = r.value.data.chart.result[0];
+            const meta = c.meta || {};
+            const quotes = c.indicators?.quote?.[0] || {};
+            const closes = quotes.close || [];
+            const prev = meta.chartPreviousClose || meta.previousClose || 0;
+            const last = meta.regularMarketPrice || closes.filter(v => v != null).pop() || 0;
+            const chg = prev ? ((last - prev) / prev * 100) : 0;
+            out[sym] = { price: last, prev, change: chg, high: meta.regularMarketDayHigh || 0, low: meta.regularMarketDayLow || 0, currency: meta.currency || '', exchange: meta.exchangeName || '', name: meta.shortName || sym, ts: meta.regularMarketTime || 0 };
+          } else {
+            out[sym] = { price: 0, prev: 0, change: 0, error: true };
+          }
+        });
+        result = { data: out };
+        break;
+      }
       case 'test':
         // Debug endpoint
         const cookies = await getNSECookies();

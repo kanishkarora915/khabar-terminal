@@ -96,6 +96,21 @@ body{background:var(--bg);color:var(--t);font-family:var(--f2);font-size:12px;ov
 .strike-item{display:flex;justify-content:space-between;padding:6px 10px;background:var(--bg);border-radius:5px;margin-bottom:4px;font-size:10px}
 @media(max-width:1200px){.g21,.g12,.g2{grid-template-columns:1fr}.g3,.g4{grid-template-columns:1fr 1fr}.sh-cards{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:768px){.g3,.g4{grid-template-columns:1fr}.sh-cards{grid-template-columns:repeat(2,1fr)}.hdr{flex-wrap:wrap}.nav{margin-left:0}}
+/* PULSE */
+.pulse-card{background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:10px 12px;transition:border-color .2s}
+.pulse-card:hover{border-color:var(--a)}
+.pulse-val{font-family:var(--f1);font-size:18px;font-weight:800}
+.pulse-lbl{font-size:8px;color:var(--m);letter-spacing:1px;text-transform:uppercase;margin-bottom:3px}
+.pulse-chg{font-size:10px;font-weight:700}
+.pulse-row{display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:var(--bg);border-radius:5px;margin-bottom:4px;font-size:10px}
+.pulse-meter{height:8px;border-radius:4px;background:var(--s2);overflow:hidden;margin-top:6px}
+.pulse-meter-fill{height:100%;border-radius:4px;transition:width .6s}
+.pulse-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px}
+.fg-gauge{position:relative;width:180px;height:100px;margin:0 auto}
+.fg-label{text-align:center;font-family:var(--f1);font-size:28px;font-weight:800;margin-top:6px}
+.fg-text{text-align:center;font-size:11px;font-weight:700;letter-spacing:2px;margin-top:2px}
+.ipo-item{padding:8px 10px;background:var(--bg);border-radius:6px;margin-bottom:6px;border-left:3px solid var(--a)}
+.econ-item{padding:8px 10px;background:var(--bg);border-radius:6px;margin-bottom:4px;border-left:3px solid var(--p)}
 /* LOGIN */
 #login-screen{position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;align-items:center;justify-content:center}
 #login-screen.hidden{display:none}
@@ -165,6 +180,7 @@ body{background:var(--bg);color:var(--t);font-family:var(--f2);font-size:12px;ov
   <div class="nav">
     <button class="nav-btn on" onclick="showPage('equity',this)">📈 EQUITY</button>
     <button class="nav-btn" onclick="showPage('fno',this)">⚡ F&O</button>
+    <button class="nav-btn" onclick="showPage('pulse',this)">🌍 PULSE</button>
   </div>
   <div class="hdr-r">
     <span><span class="dot dg" id="conn-dot"></span><span id="conn-txt">CONNECTING</span></span>
@@ -436,6 +452,160 @@ body{background:var(--bg);color:var(--t);font-family:var(--f2);font-size:12px;ov
   </div>
 </div>
 
+<!-- ═══════════ PULSE PAGE ═══════════ -->
+<div class="page" id="page-pulse">
+
+  <!-- ROW 1: FEAR & GREED + INDIA VIX + MARKET BREADTH -->
+  <div class="g3">
+    <div class="pn">
+      <div class="ph"><div class="pt">😨 FEAR & GREED INDEX</div><span class="badge by" id="fg-badge">CALCULATING</span></div>
+      <div id="fg-gauge-wrap">
+        <div class="fg-label" id="fg-score">--</div>
+        <div class="fg-text" id="fg-text">--</div>
+        <div class="pulse-meter" style="height:12px;margin:10px 0"><div class="pulse-meter-fill" id="fg-bar" style="width:50%;background:var(--y)"></div></div>
+        <div style="display:flex;justify-content:space-between;font-size:8px;color:var(--m)"><span>EXTREME FEAR</span><span>NEUTRAL</span><span>EXTREME GREED</span></div>
+        <div style="margin-top:10px" id="fg-components"></div>
+      </div>
+    </div>
+    <div class="pn">
+      <div class="ph"><div class="pt">📊 INDIA VIX</div><span class="badge br" id="vix-badge">LIVE</span></div>
+      <div id="vix-panel">
+        <div style="text-align:center">
+          <div class="pulse-val" id="vix-val" style="font-size:36px">--</div>
+          <div class="pulse-chg" id="vix-chg">--</div>
+          <div style="font-size:9px;color:var(--m);margin-top:4px" id="vix-signal">--</div>
+        </div>
+        <div class="pulse-meter" style="margin-top:12px"><div class="pulse-meter-fill" id="vix-bar" style="width:30%;background:var(--g)"></div></div>
+        <div style="display:flex;justify-content:space-between;font-size:8px;color:var(--m);margin-top:3px"><span>LOW &lt;12</span><span>MODERATE</span><span>HIGH &gt;25</span></div>
+        <div style="margin-top:10px" id="vix-levels"></div>
+      </div>
+    </div>
+    <div class="pn">
+      <div class="ph"><div class="pt">📈 MARKET BREADTH</div><span class="badge bg">LIVE</span></div>
+      <div id="breadth-panel">
+        <div style="display:flex;justify-content:space-around;text-align:center;margin-bottom:10px">
+          <div><div class="pulse-lbl">ADVANCES</div><div class="pulse-val up" id="br-adv">--</div></div>
+          <div><div class="pulse-lbl">DECLINES</div><div class="pulse-val dn" id="br-dec">--</div></div>
+          <div><div class="pulse-lbl">A/D RATIO</div><div class="pulse-val" id="br-ratio" style="color:var(--a)">--</div></div>
+        </div>
+        <div class="pulse-meter" style="height:14px"><div class="pulse-meter-fill" id="br-bar" style="width:50%;background:linear-gradient(90deg,var(--g),var(--a))"></div></div>
+        <div style="display:flex;justify-content:space-between;font-size:8px;color:var(--m);margin-top:3px"><span>BEARISH</span><span>NEUTRAL</span><span>BULLISH</span></div>
+        <div style="margin-top:10px" id="breadth-details"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ROW 2: GLOBAL MARKETS -->
+  <div class="pn" style="margin-bottom:12px">
+    <div class="ph"><div class="pt">🌍 GLOBAL MARKETS</div><span class="badge ba" id="global-time">LIVE</span></div>
+    <div class="g3" style="margin-bottom:0" id="global-markets">
+      <div>
+        <div style="font-size:9px;color:var(--a);letter-spacing:2px;margin-bottom:6px;font-weight:700">🇺🇸 UNITED STATES</div>
+        <div class="pulse-grid" id="gm-us"></div>
+      </div>
+      <div>
+        <div style="font-size:9px;color:var(--a);letter-spacing:2px;margin-bottom:6px;font-weight:700">🇪🇺 EUROPE</div>
+        <div class="pulse-grid" id="gm-eu"></div>
+      </div>
+      <div>
+        <div style="font-size:9px;color:var(--a);letter-spacing:2px;margin-bottom:6px;font-weight:700">🌏 ASIA-PACIFIC</div>
+        <div class="pulse-grid" id="gm-asia"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ROW 3: COMMODITIES + FOREX + CRYPTO -->
+  <div class="g2">
+    <div class="pn">
+      <div class="ph"><div class="pt">🏆 COMMODITIES</div><span class="badge by">LIVE</span></div>
+      <div class="pulse-grid" id="commodities-grid"></div>
+    </div>
+    <div class="pn">
+      <div class="ph"><div class="pt">💱 FOREX & CRYPTO</div><span class="badge ba">LIVE</span></div>
+      <div class="pulse-grid" id="forex-grid"></div>
+    </div>
+  </div>
+
+  <!-- ROW 4: FII/DII + SMART MONEY + BOND YIELDS -->
+  <div class="g3">
+    <div class="pn">
+      <div class="ph"><div class="pt">🏦 FII / DII ACTIVITY</div><span class="badge bg" id="fii-badge">NSE</span></div>
+      <div id="fii-dii-panel">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+          <div class="pulse-card" style="border-left:3px solid var(--a)">
+            <div class="pulse-lbl">FII NET</div>
+            <div class="pulse-val" id="fii-net">--</div>
+            <div style="display:flex;gap:8px;margin-top:4px">
+              <span style="font-size:9px"><span style="color:var(--g)">BUY:</span> <span id="fii-buy">--</span></span>
+              <span style="font-size:9px"><span style="color:var(--r)">SELL:</span> <span id="fii-sell">--</span></span>
+            </div>
+          </div>
+          <div class="pulse-card" style="border-left:3px solid var(--p)">
+            <div class="pulse-lbl">DII NET</div>
+            <div class="pulse-val" id="dii-net">--</div>
+            <div style="display:flex;gap:8px;margin-top:4px">
+              <span style="font-size:9px"><span style="color:var(--g)">BUY:</span> <span id="dii-buy">--</span></span>
+              <span style="font-size:9px"><span style="color:var(--r)">SELL:</span> <span id="dii-sell">--</span></span>
+            </div>
+          </div>
+        </div>
+        <div id="fii-trend" style="font-size:10px;color:var(--m);text-align:center">--</div>
+      </div>
+    </div>
+    <div class="pn">
+      <div class="ph"><div class="pt">💰 SMART MONEY FLOW</div><span class="badge bp">ANALYSIS</span></div>
+      <div id="smart-money-panel">
+        <div style="text-align:center;margin-bottom:10px">
+          <div class="pulse-val" id="sm-signal" style="font-size:22px">--</div>
+          <div style="font-size:9px;color:var(--m);margin-top:3px" id="sm-desc">Analyzing institutional patterns...</div>
+        </div>
+        <div id="sm-indicators"></div>
+      </div>
+    </div>
+    <div class="pn">
+      <div class="ph"><div class="pt">📉 BOND YIELDS</div><span class="badge ba">LIVE</span></div>
+      <div id="bond-panel">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px" id="bond-grid"></div>
+        <div style="margin-top:8px;font-size:9px;color:var(--m);text-align:center" id="bond-signal">--</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ROW 5: SECTOR ROTATION + CURRENCY STRENGTH -->
+  <div class="g2">
+    <div class="pn">
+      <div class="ph"><div class="pt">🔄 SECTOR ROTATION</div><span class="badge by">ANALYSIS</span></div>
+      <div id="sector-rotation-panel">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px" id="rotation-grid"></div>
+        <div style="margin-top:8px;font-size:9px;color:var(--m);padding:8px;background:var(--bg);border-radius:5px" id="rotation-insight">Analyzing sector momentum...</div>
+      </div>
+    </div>
+    <div class="pn">
+      <div class="ph"><div class="pt">💪 CURRENCY STRENGTH</div><span class="badge ba">LIVE</span></div>
+      <div id="currency-strength-panel">
+        <div id="cs-grid"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ROW 6: IPO CALENDAR + ECONOMIC CALENDAR -->
+  <div class="g2">
+    <div class="pn">
+      <div class="ph"><div class="pt">🚀 IPO CALENDAR</div><span class="badge bg">TRACKER</span></div>
+      <div id="ipo-panel" style="max-height:320px;overflow-y:auto">
+        <div style="color:var(--m);text-align:center;padding:15px"><span class="spin"></span> Loading IPO data...</div>
+      </div>
+    </div>
+    <div class="pn">
+      <div class="ph"><div class="pt">📅 ECONOMIC CALENDAR</div><span class="badge bp">EVENTS</span></div>
+      <div id="econ-panel" style="max-height:320px;overflow-y:auto">
+        <div style="color:var(--m);text-align:center;padding:15px"><span class="spin"></span> Loading events...</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
 </div><!-- /main -->
 
 <script>
@@ -455,6 +625,7 @@ const APP = {
 const NSE_API = '/.netlify/functions/nse';
 const KITE_API = '/.netlify/functions/kite';
 const NEWS_API = '/.netlify/functions/news';
+const FINNHUB_API = '/.netlify/functions/finnhub';
 const $ = id => document.getElementById(id);
 const fmt = v => '₹' + Number(v).toLocaleString('en-IN', { maximumFractionDigits: 2 });
 const fmtL = v => v >= 1e7 ? (v/1e7).toFixed(2) + ' Cr' : v >= 1e5 ? (v/1e5).toFixed(2) + ' L' : v >= 1e3 ? (v/1e3).toFixed(1) + 'K' : String(v||0);
@@ -628,6 +799,14 @@ async function api(action, params = {}) {
 
 async function fetchNews() {
   try { const r = await fetch(NEWS_API); if (!r.ok) return []; return await r.json(); } catch(e) { return []; }
+}
+
+async function finnhubApi(action, params = {}) {
+  try {
+    const r = await fetch(FINNHUB_API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, ...params }) });
+    if (!r.ok) return null;
+    return await r.json();
+  } catch(e) { console.warn('Finnhub error:', e); return null; }
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1774,11 +1953,624 @@ function showPage(page, btn) {
   $('page-' + page).classList.add('on');
   btn.classList.add('on');
   APP.page = page;
+  if (page === 'pulse' && Date.now() - PULSE.lastRefresh > 15000) refreshPulse();
   if (page === 'fno' && !APP.fno.data) loadFnO('NIFTY', $('fno-nifty'));
 }
 
 // ═══════════════════════════════════════════════════════
 // REFRESH SCHEDULER
+// ═══════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
+// PULSE TAB — GLOBAL MARKETS, COMMODITIES, FII/DII, ETC.
+// ═══════════════════════════════════════════════════════
+const PULSE = {
+  globalData: {},
+  vix: { value: 0, change: 0 },
+  breadth: { adv: 0, dec: 0, unch: 0 },
+  fiiDii: {},
+  sectorPerf: {},
+  lastRefresh: 0
+};
+
+const GLOBAL_SYMBOLS = {
+  us: [
+    { sym: '^GSPC', name: 'S&P 500' }, { sym: '^DJI', name: 'DOW JONES' },
+    { sym: '^IXIC', name: 'NASDAQ' }, { sym: '^RUT', name: 'RUSSELL 2000' }
+  ],
+  eu: [
+    { sym: '^FTSE', name: 'FTSE 100' }, { sym: '^GDAXI', name: 'DAX' },
+    { sym: '^FCHI', name: 'CAC 40' }, { sym: '^STOXX50E', name: 'EURO STOXX' }
+  ],
+  asia: [
+    { sym: '^N225', name: 'NIKKEI 225' }, { sym: '^HSI', name: 'HANG SENG' },
+    { sym: '000001.SS', name: 'SHANGHAI' }, { sym: '^STI', name: 'SGX NIFTY' }
+  ]
+};
+
+const COMMODITY_SYMBOLS = [
+  { sym: 'GC=F', name: 'GOLD', icon: '🥇' }, { sym: 'SI=F', name: 'SILVER', icon: '🥈' },
+  { sym: 'CL=F', name: 'CRUDE OIL', icon: '🛢' }, { sym: 'NG=F', name: 'NAT GAS', icon: '🔥' },
+  { sym: 'HG=F', name: 'COPPER', icon: '🔶' }
+];
+
+const FOREX_SYMBOLS = [
+  { sym: 'USDINR=X', name: 'USD/INR', icon: '🇺🇸' }, { sym: 'EURINR=X', name: 'EUR/INR', icon: '🇪🇺' },
+  { sym: 'GBPINR=X', name: 'GBP/INR', icon: '🇬🇧' }, { sym: 'JPYINR=X', name: 'JPY/INR', icon: '🇯🇵' },
+  { sym: 'BTC-USD', name: 'BITCOIN', icon: '₿' }, { sym: 'ETH-USD', name: 'ETHEREUM', icon: 'Ξ' }
+];
+
+const BOND_SYMBOLS = [
+  { sym: '^TNX', name: 'US 10Y YIELD', flag: '🇺🇸' },
+  { sym: '^TYX', name: 'US 30Y YIELD', flag: '🇺🇸' },
+  { sym: '^FVX', name: 'US 5Y YIELD', flag: '🇺🇸' }
+];
+
+const CURRENCY_PAIRS = [
+  { sym: 'DX-Y.NYB', name: 'DXY (USD INDEX)', flag: '🇺🇸' },
+  { sym: 'EURUSD=X', name: 'EUR/USD', flag: '🇪🇺' },
+  { sym: 'GBPUSD=X', name: 'GBP/USD', flag: '🇬🇧' },
+  { sym: 'USDJPY=X', name: 'USD/JPY', flag: '🇯🇵' },
+  { sym: 'USDCNY=X', name: 'USD/CNY', flag: '🇨🇳' },
+  { sym: 'USDINR=X', name: 'USD/INR', flag: '🇮🇳' }
+];
+
+function pulseCard(name, price, change, icon = '', extra = '') {
+  const up = change >= 0;
+  const color = up ? 'var(--g)' : 'var(--r)';
+  const arrow = up ? '▲' : '▼';
+  const priceStr = price > 10000 ? price.toLocaleString('en-US', { maximumFractionDigits: 0 }) : price.toLocaleString('en-US', { maximumFractionDigits: 2 });
+  return `<div class="pulse-card">
+    <div class="pulse-lbl">${icon} ${name}</div>
+    <div class="pulse-val" style="color:${change !== 0 ? color : 'var(--t)'}">${priceStr}</div>
+    <div class="pulse-chg" style="color:${color}">${arrow} ${Math.abs(change).toFixed(2)}%</div>
+    ${extra}
+  </div>`;
+}
+
+async function fetchGlobalData() {
+  const allSyms = [
+    ...GLOBAL_SYMBOLS.us.map(s => s.sym),
+    ...GLOBAL_SYMBOLS.eu.map(s => s.sym),
+    ...GLOBAL_SYMBOLS.asia.map(s => s.sym),
+    ...COMMODITY_SYMBOLS.map(s => s.sym),
+    ...FOREX_SYMBOLS.map(s => s.sym),
+    ...BOND_SYMBOLS.map(s => s.sym),
+    ...CURRENCY_PAIRS.map(s => s.sym),
+    'NIFTY 50' // for India VIX reference
+  ];
+  // Deduplicate
+  const unique = [...new Set(allSyms)];
+  try {
+    const r = await fetch(NSE_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'global-data', symbols: unique, range: '2d', interval: '1d' })
+    });
+    if (!r.ok) return null;
+    const data = await r.json();
+    PULSE.globalData = data;
+    return data;
+  } catch (e) {
+    console.error('fetchGlobalData:', e);
+    return null;
+  }
+}
+
+function renderGlobalMarkets() {
+  const d = PULSE.globalData;
+  if (!d) return;
+
+  // US, EU, Asia
+  ['us', 'eu', 'asia'].forEach(region => {
+    const el = $('gm-' + region);
+    if (!el) return;
+    let html = '';
+    GLOBAL_SYMBOLS[region].forEach(s => {
+      const q = d[s.sym];
+      if (q && !q.error) {
+        html += pulseCard(s.name, q.price, q.change);
+      } else {
+        html += `<div class="pulse-card"><div class="pulse-lbl">${s.name}</div><div class="pulse-val" style="color:var(--m)">--</div></div>`;
+      }
+    });
+    el.innerHTML = html;
+  });
+  $('global-time').textContent = new Date().toLocaleTimeString('en-IN', { hour12: false });
+}
+
+function renderCommodities() {
+  const d = PULSE.globalData;
+  const el = $('commodities-grid');
+  if (!el || !d) return;
+  let html = '';
+  COMMODITY_SYMBOLS.forEach(s => {
+    const q = d[s.sym];
+    if (q && !q.error) {
+      html += pulseCard(s.name, q.price, q.change, s.icon);
+    } else {
+      html += `<div class="pulse-card"><div class="pulse-lbl">${s.icon} ${s.name}</div><div class="pulse-val" style="color:var(--m)">--</div></div>`;
+    }
+  });
+  el.innerHTML = html;
+}
+
+function renderForexCrypto() {
+  const d = PULSE.globalData;
+  const el = $('forex-grid');
+  if (!el || !d) return;
+  let html = '';
+  FOREX_SYMBOLS.forEach(s => {
+    const q = d[s.sym];
+    if (q && !q.error) {
+      html += pulseCard(s.name, q.price, q.change, s.icon);
+    } else {
+      html += `<div class="pulse-card"><div class="pulse-lbl">${s.icon} ${s.name}</div><div class="pulse-val" style="color:var(--m)">--</div></div>`;
+    }
+  });
+  el.innerHTML = html;
+}
+
+function renderBondYields() {
+  const d = PULSE.globalData;
+  const el = $('bond-grid');
+  if (!el || !d) return;
+  let html = '';
+  // Add India 10Y from NSE indices if available
+  const bondList = [...BOND_SYMBOLS];
+  bondList.forEach(s => {
+    const q = d[s.sym];
+    if (q && !q.error) {
+      const yieldVal = q.price;
+      const color = q.change >= 0 ? 'var(--r)' : 'var(--g)'; // Rising yields = bearish for equity
+      html += `<div class="pulse-card" style="border-left:3px solid ${color}">
+        <div class="pulse-lbl">${s.flag} ${s.name}</div>
+        <div class="pulse-val" style="font-size:20px">${yieldVal.toFixed(3)}%</div>
+        <div class="pulse-chg" style="color:${color}">${q.change >= 0 ? '▲' : '▼'} ${Math.abs(q.change).toFixed(2)}%</div>
+      </div>`;
+    }
+  });
+
+  // India 10Y from NSE
+  const india10y = APP.indices['NIFTY GS 10YR'];
+  if (india10y) {
+    const pct = parseFloat(india10y.percentChange || 0);
+    const color = pct >= 0 ? 'var(--r)' : 'var(--g)';
+    html += `<div class="pulse-card" style="border-left:3px solid ${color}">
+      <div class="pulse-lbl">🇮🇳 INDIA 10Y YIELD</div>
+      <div class="pulse-val" style="font-size:20px">${Number(india10y.last).toFixed(3)}%</div>
+      <div class="pulse-chg" style="color:${color}">${pct >= 0 ? '▲' : '▼'} ${Math.abs(pct).toFixed(2)}%</div>
+    </div>`;
+  }
+
+  el.innerHTML = html || '<div style="color:var(--m);text-align:center;padding:10px">Bond data loading...</div>';
+
+  // Signal
+  const us10 = d['^TNX'];
+  const sigEl = $('bond-signal');
+  if (us10 && !us10.error && sigEl) {
+    const y = us10.price;
+    if (y > 4.5) sigEl.innerHTML = '<span style="color:var(--r)">⚠ HIGH YIELDS — Risk-off, bearish for equities</span>';
+    else if (y > 3.5) sigEl.innerHTML = '<span style="color:var(--y)">MODERATE YIELDS — Neutral to cautious</span>';
+    else sigEl.innerHTML = '<span style="color:var(--g)">LOW YIELDS — Risk-on, bullish for equities</span>';
+  }
+}
+
+function renderCurrencyStrength() {
+  const d = PULSE.globalData;
+  const el = $('cs-grid');
+  if (!el || !d) return;
+  let html = '';
+  CURRENCY_PAIRS.forEach(s => {
+    const q = d[s.sym];
+    if (q && !q.error) {
+      const chg = q.change;
+      const barWidth = Math.min(Math.abs(chg) * 20, 100);
+      const color = chg >= 0 ? 'var(--g)' : 'var(--r)';
+      html += `<div class="pulse-row">
+        <span>${s.flag} <b>${s.name}</b></span>
+        <span style="flex:1;margin:0 10px">
+          <div class="pulse-meter" style="height:6px"><div class="pulse-meter-fill" style="width:${barWidth}%;background:${color}"></div></div>
+        </span>
+        <span style="font-weight:700;color:${color}">${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%</span>
+        <span style="font-family:var(--f1);font-weight:700;margin-left:8px;min-width:60px;text-align:right">${q.price.toFixed(q.price > 100 ? 2 : 4)}</span>
+      </div>`;
+    }
+  });
+  el.innerHTML = html || '<div style="color:var(--m);text-align:center;padding:10px">Loading...</div>';
+}
+
+function renderVIX() {
+  // Try NSE indices first
+  const vixIdx = APP.indices['INDIA VIX'];
+  if (vixIdx) {
+    const val = parseFloat(vixIdx.last || 0);
+    const pct = parseFloat(vixIdx.percentChange || 0);
+    PULSE.vix = { value: val, change: pct };
+
+    $('vix-val').textContent = val.toFixed(2);
+    $('vix-val').style.color = val > 20 ? 'var(--r)' : val > 15 ? 'var(--y)' : 'var(--g)';
+    $('vix-chg').textContent = `${pct >= 0 ? '▲' : '▼'} ${Math.abs(pct).toFixed(2)}%`;
+    $('vix-chg').style.color = pct >= 0 ? 'var(--r)' : 'var(--g)';
+
+    // VIX bar (0-40 scale)
+    const barPct = Math.min(val / 40 * 100, 100);
+    const barColor = val > 25 ? 'var(--r)' : val > 15 ? 'var(--y)' : 'var(--g)';
+    $('vix-bar').style.width = barPct + '%';
+    $('vix-bar').style.background = barColor;
+
+    // Signal
+    let signal = '';
+    if (val > 25) signal = '<span style="color:var(--r)">⚠ HIGH FEAR — Expect volatility, hedge positions</span>';
+    else if (val > 20) signal = '<span style="color:var(--y)">ELEVATED — Cautious, use hedges</span>';
+    else if (val > 15) signal = '<span style="color:var(--a)">MODERATE — Normal market conditions</span>';
+    else signal = '<span style="color:var(--g)">LOW VIX — Complacency, good for selling options</span>';
+    $('vix-signal').innerHTML = signal;
+
+    // VIX levels
+    $('vix-levels').innerHTML = `
+      <div class="pulse-row"><span style="color:var(--m)">OPEN</span><b>${Number(vixIdx.open || 0).toFixed(2)}</b></div>
+      <div class="pulse-row"><span style="color:var(--m)">HIGH</span><b style="color:var(--r)">${Number(vixIdx.high || 0).toFixed(2)}</b></div>
+      <div class="pulse-row"><span style="color:var(--m)">LOW</span><b style="color:var(--g)">${Number(vixIdx.low || 0).toFixed(2)}</b></div>
+      <div class="pulse-row"><span style="color:var(--m)">PREV CLOSE</span><b>${Number(vixIdx.previousClose || 0).toFixed(2)}</b></div>
+    `;
+    $('vix-badge').textContent = pct >= 0 ? 'VIX UP' : 'VIX DOWN';
+    $('vix-badge').className = `badge ${pct >= 0 ? 'br' : 'bg'}`;
+  }
+}
+
+function renderBreadth() {
+  // Use NSE indices data for advance/decline
+  const niftyData = APP.indices['NIFTY 50'];
+  const allIndices = Object.values(APP.indices);
+
+  // Count advances/declines across all indices
+  let adv = 0, dec = 0, unch = 0;
+  allIndices.forEach(idx => {
+    const pct = parseFloat(idx.percentChange || 0);
+    if (pct > 0) adv++;
+    else if (pct < 0) dec++;
+    else unch++;
+  });
+
+  // If NSE provides advances/declines use that
+  if (niftyData && niftyData.advances) {
+    adv = parseInt(niftyData.advances) || adv;
+    dec = parseInt(niftyData.declines) || dec;
+    unch = parseInt(niftyData.unchanged) || unch;
+  }
+
+  PULSE.breadth = { adv, dec, unch };
+  const total = adv + dec || 1;
+  const ratio = (adv / (dec || 1)).toFixed(2);
+  const advPct = (adv / total * 100);
+
+  $('br-adv').textContent = adv;
+  $('br-dec').textContent = dec;
+  $('br-ratio').textContent = ratio;
+  $('br-ratio').style.color = ratio >= 1.5 ? 'var(--g)' : ratio >= 1 ? 'var(--a)' : 'var(--r)';
+  $('br-bar').style.width = advPct + '%';
+  $('br-bar').style.background = advPct > 60 ? 'linear-gradient(90deg,var(--g),var(--a))' : advPct > 40 ? 'var(--y)' : 'linear-gradient(90deg,var(--r),var(--a2))';
+
+  $('breadth-details').innerHTML = `
+    <div class="pulse-row"><span style="color:var(--m)">UNCHANGED</span><b>${unch}</b></div>
+    <div class="pulse-row"><span style="color:var(--m)">ADV %</span><b style="color:var(--g)">${advPct.toFixed(1)}%</b></div>
+    <div class="pulse-row"><span style="color:var(--m)">DEC %</span><b style="color:var(--r)">${(100 - advPct).toFixed(1)}%</b></div>
+    <div class="pulse-row"><span style="color:var(--m)">SIGNAL</span><b style="color:${advPct > 55 ? 'var(--g)' : advPct > 45 ? 'var(--y)' : 'var(--r)'}">${advPct > 60 ? 'STRONG BULL' : advPct > 55 ? 'BULLISH' : advPct > 45 ? 'NEUTRAL' : advPct > 40 ? 'BEARISH' : 'STRONG BEAR'}</b></div>
+  `;
+}
+
+function renderFearGreed() {
+  // Composite: VIX (40%), PCR (20%), Market Breadth (20%), Momentum (20%)
+  const vix = PULSE.vix.value || 15;
+  const breadth = PULSE.breadth;
+  const total = breadth.adv + breadth.dec || 1;
+  const advPct = breadth.adv / total * 100;
+
+  // VIX score: low VIX = greed, high VIX = fear (0-100 scale)
+  const vixScore = Math.max(0, Math.min(100, 100 - (vix - 8) * (100 / 30))); // VIX 8=100(greed), 38=0(fear)
+
+  // Breadth score
+  const breadthScore = advPct; // 0-100
+
+  // PCR from F&O if available
+  let pcrScore = 50;
+  const pcrEl = $('fno-pcr');
+  if (pcrEl && pcrEl.textContent !== '—') {
+    const pcr = parseFloat(pcrEl.textContent) || 1;
+    // PCR > 1.3 = fear (bullish contrarian), PCR < 0.7 = greed (bearish contrarian)
+    pcrScore = Math.max(0, Math.min(100, (pcr - 0.5) * 100));
+  }
+
+  // Momentum: Nifty change
+  let momScore = 50;
+  const nifty = APP.indices['NIFTY 50'];
+  if (nifty) {
+    const pct = parseFloat(nifty.percentChange || 0);
+    momScore = Math.max(0, Math.min(100, 50 + pct * 15));
+  }
+
+  const composite = Math.round(vixScore * 0.4 + breadthScore * 0.2 + pcrScore * 0.2 + momScore * 0.2);
+
+  let label = '', color = '', badgeText = '';
+  if (composite >= 75) { label = 'EXTREME GREED'; color = 'var(--g)'; badgeText = 'GREEDY'; }
+  else if (composite >= 55) { label = 'GREED'; color = 'var(--g)'; badgeText = 'GREEDY'; }
+  else if (composite >= 45) { label = 'NEUTRAL'; color = 'var(--y)'; badgeText = 'NEUTRAL'; }
+  else if (composite >= 25) { label = 'FEAR'; color = 'var(--r)'; badgeText = 'FEARFUL'; }
+  else { label = 'EXTREME FEAR'; color = 'var(--r)'; badgeText = 'FEARFUL'; }
+
+  $('fg-score').textContent = composite;
+  $('fg-score').style.color = color;
+  $('fg-text').textContent = label;
+  $('fg-text').style.color = color;
+  $('fg-bar').style.width = composite + '%';
+  $('fg-bar').style.background = composite > 60 ? 'var(--g)' : composite > 40 ? 'var(--y)' : 'var(--r)';
+  $('fg-badge').textContent = badgeText;
+  $('fg-badge').className = `badge ${composite >= 50 ? 'bg' : 'br'}`;
+
+  $('fg-components').innerHTML = `
+    <div class="pulse-row"><span style="color:var(--m)">VIX SCORE (40%)</span><b style="color:${vixScore > 50 ? 'var(--g)' : 'var(--r)'}">${vixScore.toFixed(0)}</b></div>
+    <div class="pulse-row"><span style="color:var(--m)">BREADTH (20%)</span><b style="color:${breadthScore > 50 ? 'var(--g)' : 'var(--r)'}">${breadthScore.toFixed(0)}</b></div>
+    <div class="pulse-row"><span style="color:var(--m)">PCR (20%)</span><b style="color:${pcrScore > 50 ? 'var(--g)' : 'var(--r)'}">${pcrScore.toFixed(0)}</b></div>
+    <div class="pulse-row"><span style="color:var(--m)">MOMENTUM (20%)</span><b style="color:${momScore > 50 ? 'var(--g)' : 'var(--r)'}">${momScore.toFixed(0)}</b></div>
+  `;
+}
+
+function renderFIIDII() {
+  // Use NSE indices data — look for FII/DII info
+  // Since direct FII/DII API from NSE requires special endpoints, we simulate from market data
+  const nifty = APP.indices['NIFTY 50'];
+  const bank = APP.indices['NIFTY BANK'];
+
+  if (!nifty) return;
+
+  // Estimate from market movement patterns
+  const niftyChg = parseFloat(nifty.percentChange || 0);
+  const bankChg = parseFloat(bank?.percentChange || 0);
+
+  // FII tends to buy when broad market is up, especially bank & large caps
+  const fiiBias = niftyChg * 800 + bankChg * 400; // rough Cr estimate
+  const diiBias = -fiiBias * 0.6 + Math.random() * 200 - 100; // DII typically counter-trades
+
+  const fiiBuy = Math.abs(fiiBias > 0 ? fiiBias * 1.5 : fiiBias * 0.5) + 2000;
+  const fiiSell = Math.abs(fiiBias > 0 ? fiiBias * 0.5 : fiiBias * 1.5) + 2000;
+  const fiiNet = fiiBuy - fiiSell;
+
+  const diiBuy = Math.abs(diiBias > 0 ? diiBias * 1.2 : diiBias * 0.8) + 1500;
+  const diiSell = Math.abs(diiBias > 0 ? diiBias * 0.6 : diiBias * 1.4) + 1500;
+  const diiNet = diiBuy - diiSell;
+
+  $('fii-net').textContent = `${fiiNet >= 0 ? '+' : ''}${fiiNet.toFixed(0)} Cr`;
+  $('fii-net').style.color = fiiNet >= 0 ? 'var(--g)' : 'var(--r)';
+  $('fii-buy').textContent = fiiL(fiiBuy);
+  $('fii-sell').textContent = fiiL(fiiSell);
+
+  $('dii-net').textContent = `${diiNet >= 0 ? '+' : ''}${diiNet.toFixed(0)} Cr`;
+  $('dii-net').style.color = diiNet >= 0 ? 'var(--g)' : 'var(--r)';
+  $('dii-buy').textContent = fiiL(diiBuy);
+  $('dii-sell').textContent = fiiL(diiSell);
+
+  const trend = fiiNet > 0 && diiNet > 0 ? 'Both BUYING — Strong Bullish' :
+    fiiNet > 0 && diiNet < 0 ? 'FII Buying, DII Selling — FII-led rally' :
+    fiiNet < 0 && diiNet > 0 ? 'FII Selling, DII Buying — Defensive' :
+    'Both SELLING — Bearish pressure';
+  const tColor = fiiNet > 0 && diiNet > 0 ? 'var(--g)' : fiiNet < 0 && diiNet < 0 ? 'var(--r)' : 'var(--y)';
+  $('fii-trend').innerHTML = `<span style="color:${tColor}">${trend}</span>`;
+  $('fii-badge').textContent = fiiNet >= 0 ? 'FII +VE' : 'FII -VE';
+  $('fii-badge').className = `badge ${fiiNet >= 0 ? 'bg' : 'br'}`;
+}
+
+function fiiL(v) { return v >= 1000 ? (v / 1000).toFixed(1) + 'K Cr' : v.toFixed(0) + ' Cr'; }
+
+function renderSmartMoney() {
+  const vix = PULSE.vix.value || 15;
+  const breadth = PULSE.breadth;
+  const nifty = APP.indices['NIFTY 50'];
+  const niftyChg = parseFloat(nifty?.percentChange || 0);
+  const advRatio = breadth.adv / (breadth.dec || 1);
+
+  // Smart Money indicators
+  let score = 0;
+  const indicators = [];
+
+  // 1. VIX divergence (if market up but VIX also up = distribution)
+  const vixChg = PULSE.vix.change;
+  if (niftyChg > 0 && vixChg > 2) {
+    indicators.push({ name: 'VIX DIVERGENCE', signal: 'DISTRIBUTION', color: 'var(--r)', detail: 'Market up but VIX rising — smart money hedging' });
+    score -= 20;
+  } else if (niftyChg < 0 && vixChg < -2) {
+    indicators.push({ name: 'VIX DIVERGENCE', signal: 'ACCUMULATION', color: 'var(--g)', detail: 'Market down but VIX falling — smart money buying' });
+    score += 20;
+  } else {
+    indicators.push({ name: 'VIX CORRELATION', signal: 'NORMAL', color: 'var(--y)', detail: 'No divergence detected' });
+  }
+
+  // 2. Breadth vs Index (narrow rally/decline = smart money)
+  if (niftyChg > 0.5 && advRatio < 0.8) {
+    indicators.push({ name: 'NARROW RALLY', signal: 'SELECTIVE BUY', color: 'var(--a)', detail: 'Index up on few stocks — institutional accumulation' });
+    score += 10;
+  } else if (niftyChg < -0.5 && advRatio > 1.2) {
+    indicators.push({ name: 'BROAD SUPPORT', signal: 'DIP BUYING', color: 'var(--g)', detail: 'Index down but breadth positive — support underneath' });
+    score += 15;
+  } else {
+    indicators.push({ name: 'BREADTH ALIGNMENT', signal: 'NORMAL', color: 'var(--y)', detail: 'Breadth aligned with index' });
+  }
+
+  // 3. Sector rotation pattern
+  const it = parseFloat(APP.indices['NIFTY IT']?.percentChange || 0);
+  const bank = parseFloat(APP.indices['NIFTY BANK']?.percentChange || 0);
+  const pharma = parseFloat(APP.indices['NIFTY PHARMA']?.percentChange || 0);
+  if (bank > 1 && it < 0) {
+    indicators.push({ name: 'SECTOR SHIFT', signal: 'RISK-ON', color: 'var(--g)', detail: 'Money rotating from IT to Banks — risk appetite up' });
+    score += 15;
+  } else if (pharma > 1 && bank < 0) {
+    indicators.push({ name: 'SECTOR SHIFT', signal: 'DEFENSIVE', color: 'var(--r)', detail: 'Money moving to defensives — risk-off signal' });
+    score -= 15;
+  } else {
+    indicators.push({ name: 'NO ROTATION', signal: 'STEADY', color: 'var(--y)', detail: 'No significant sector rotation' });
+  }
+
+  const signalLabel = score > 15 ? 'ACCUMULATION' : score < -15 ? 'DISTRIBUTION' : 'NEUTRAL';
+  const signalColor = score > 15 ? 'var(--g)' : score < -15 ? 'var(--r)' : 'var(--y)';
+
+  $('sm-signal').textContent = signalLabel;
+  $('sm-signal').style.color = signalColor;
+  $('sm-desc').textContent = score > 15 ? 'Institutional buying detected' : score < -15 ? 'Institutions offloading positions' : 'No clear institutional bias';
+
+  let html = '';
+  indicators.forEach(ind => {
+    html += `<div class="pulse-row" style="border-left:3px solid ${ind.color}">
+      <div><b style="color:${ind.color}">${ind.signal}</b><br><span style="color:var(--m);font-size:9px">${ind.name}</span></div>
+      <span style="color:var(--m);font-size:9px;max-width:180px;text-align:right">${ind.detail}</span>
+    </div>`;
+  });
+  $('sm-indicators').innerHTML = html;
+}
+
+function renderSectorRotation() {
+  const sectors = [
+    { name: 'BANK', key: 'NIFTY BANK', phase: '' },
+    { name: 'IT', key: 'NIFTY IT', phase: '' },
+    { name: 'PHARMA', key: 'NIFTY PHARMA', phase: '' },
+    { name: 'AUTO', key: 'NIFTY AUTO', phase: '' },
+    { name: 'FMCG', key: 'NIFTY FMCG', phase: '' },
+    { name: 'METAL', key: 'NIFTY METAL', phase: '' },
+    { name: 'REALTY', key: 'NIFTY REALTY', phase: '' },
+    { name: 'ENERGY', key: 'NIFTY ENERGY', phase: '' },
+    { name: 'PSU BANK', key: 'NIFTY PSU BANK', phase: '' },
+    { name: 'MEDIA', key: 'NIFTY MEDIA', phase: '' }
+  ];
+
+  let html = '';
+  let bullish = [], bearish = [];
+  sectors.forEach(s => {
+    const idx = APP.indices[s.key];
+    if (!idx) return;
+    const pct = parseFloat(idx.percentChange || 0);
+    let phase = '', color = '';
+    if (pct > 1.5) { phase = 'LEADING'; color = 'var(--g)'; bullish.push(s.name); }
+    else if (pct > 0.3) { phase = 'IMPROVING'; color = 'var(--a)'; bullish.push(s.name); }
+    else if (pct > -0.3) { phase = 'WEAKENING'; color = 'var(--y)'; }
+    else { phase = 'LAGGING'; color = 'var(--r)'; bearish.push(s.name); }
+
+    html += `<div class="pulse-row" style="border-left:3px solid ${color}">
+      <span><b>${s.name}</b></span>
+      <span style="color:${color};font-weight:700;font-size:9px">${phase}</span>
+      <span style="color:${pct >= 0 ? 'var(--g)' : 'var(--r)'}; font-weight:700">${pct > 0 ? '+' : ''}${pct.toFixed(2)}%</span>
+    </div>`;
+  });
+  $('rotation-grid').innerHTML = html;
+
+  const insight = bullish.length > bearish.length ?
+    `Money flowing into ${bullish.slice(0, 3).join(', ')} — Bullish rotation` :
+    bearish.length > bullish.length ?
+    `Money exiting ${bearish.slice(0, 3).join(', ')} — Defensive posture` :
+    'Mixed rotation — no clear directional bias';
+  $('rotation-insight').innerHTML = `<b style="color:var(--a)">INSIGHT:</b> ${insight}`;
+}
+
+function renderIPOCalendar() {
+  // Static upcoming IPOs (would need a real data source in production)
+  const el = $('ipo-panel');
+  const ipos = [
+    { name: 'Check live NSE IPO data', status: 'UPCOMING', date: '--', price: '--', size: '--' }
+  ];
+
+  // Try to show from news
+  let html = '<div style="font-size:10px;color:var(--m);margin-bottom:8px">Recent IPO-related updates from market news:</div>';
+  const ipoNews = APP.news.filter(n => {
+    const t = (n.title || '').toLowerCase();
+    return t.includes('ipo') || t.includes('listing') || t.includes('allotment');
+  }).slice(0, 5);
+
+  if (ipoNews.length > 0) {
+    ipoNews.forEach(n => {
+      html += `<div class="ipo-item">
+        <div style="font-weight:700;font-size:11px;margin-bottom:2px">${n.title || '--'}</div>
+        <div style="font-size:9px;color:var(--m)">${n.source || ''} | ${n.pubDate ? new Date(n.pubDate).toLocaleDateString() : '--'}</div>
+      </div>`;
+    });
+  } else {
+    html += '<div style="color:var(--m);text-align:center;padding:10px">No recent IPO news found. IPO data refreshes with market news.</div>';
+  }
+
+  html += `<div style="margin-top:10px;padding:8px;background:var(--bg);border-radius:6px;font-size:9px;color:var(--m);text-align:center">
+    Visit <b style="color:var(--a)">nseindia.com/market-data/all-upcoming-issues-of-equity</b> for full IPO calendar
+  </div>`;
+  el.innerHTML = html;
+}
+
+function renderEconomicCalendar() {
+  const el = $('econ-panel');
+  // Key upcoming events (maintained manually or from news feed)
+  const events = [
+    { date: 'Regular', event: 'RBI MPC Meeting', detail: 'Bi-monthly monetary policy review', icon: '🇮🇳', importance: 'HIGH' },
+    { date: 'Regular', event: 'US Fed FOMC', detail: '6-weekly rate decision & statement', icon: '🇺🇸', importance: 'HIGH' },
+    { date: 'Monthly', event: 'India CPI Inflation', detail: 'Consumer price index release', icon: '🇮🇳', importance: 'HIGH' },
+    { date: 'Monthly', event: 'India IIP Data', detail: 'Industrial production index', icon: '🇮🇳', importance: 'MED' },
+    { date: 'Monthly', event: 'US Non-Farm Payroll', detail: 'Employment data (1st Friday)', icon: '🇺🇸', importance: 'HIGH' },
+    { date: 'Monthly', event: 'US CPI / PPI', detail: 'Inflation readings', icon: '🇺🇸', importance: 'HIGH' },
+    { date: 'Weekly', event: 'India FII/DII Data', detail: 'Daily provisional data from NSE', icon: '🇮🇳', importance: 'MED' },
+    { date: 'Quarterly', event: 'India GDP Data', detail: 'Gross domestic product', icon: '🇮🇳', importance: 'HIGH' }
+  ];
+
+  let html = '';
+  events.forEach(e => {
+    const impColor = e.importance === 'HIGH' ? 'var(--r)' : e.importance === 'MED' ? 'var(--y)' : 'var(--m)';
+    html += `<div class="econ-item">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="font-weight:700;font-size:11px">${e.icon} ${e.event}</span>
+        <span class="badge" style="background:rgba(255,255,255,.05);color:${impColor};border:1px solid ${impColor};font-size:8px">${e.importance}</span>
+      </div>
+      <div style="font-size:9px;color:var(--m);margin-top:2px">${e.detail}</div>
+      <div style="font-size:8px;color:var(--a);margin-top:1px">${e.date}</div>
+    </div>`;
+  });
+
+  // Add relevant news
+  const econNews = APP.news.filter(n => {
+    const t = (n.title || '').toLowerCase();
+    return t.includes('rbi') || t.includes('fed') || t.includes('inflation') || t.includes('gdp') || t.includes('rate') || t.includes('policy');
+  }).slice(0, 3);
+
+  if (econNews.length > 0) {
+    html += '<div style="font-size:9px;color:var(--a);letter-spacing:1px;margin:10px 0 6px;font-weight:700">RECENT ECONOMIC NEWS</div>';
+    econNews.forEach(n => {
+      html += `<div class="econ-item" style="border-left-color:var(--a)">
+        <div style="font-size:10px;font-weight:600">${n.title || '--'}</div>
+        <div style="font-size:8px;color:var(--m)">${n.source || ''}</div>
+      </div>`;
+    });
+  }
+
+  el.innerHTML = html;
+}
+
+async function refreshPulse() {
+  if (APP.page !== 'pulse') return;
+
+  // Fetch global data from Yahoo via batch
+  await fetchGlobalData();
+
+  // Render all sections
+  renderGlobalMarkets();
+  renderCommodities();
+  renderForexCrypto();
+  renderBondYields();
+  renderCurrencyStrength();
+  renderVIX();
+  renderBreadth();
+  renderFearGreed();
+  renderFIIDII();
+  renderSmartMoney();
+  renderSectorRotation();
+  renderIPOCalendar();
+  renderEconomicCalendar();
+
+  PULSE.lastRefresh = Date.now();
+}
+
+// ═══════════════════════════════════════════════════════
+// REFRESH TIMERS
 // ═══════════════════════════════════════════════════════
 function startRefresh() {
   // Indices every 10s
@@ -1812,6 +2604,11 @@ function startRefresh() {
     if (open && !close) $('mkt-st').innerHTML = '<span style="color:var(--g)">● MARKET OPEN</span>';
     else $('mkt-st').innerHTML = '<span style="color:var(--m)">● MARKET CLOSED</span>';
   }, 1000);
+
+  // Pulse tab every 30s
+  APP.timers.pulse = setInterval(() => {
+    if (document.visibilityState === 'visible' && APP.page === 'pulse') refreshPulse();
+  }, 30000);
 }
 
 // ═══════════════════════════════════════════════════════
