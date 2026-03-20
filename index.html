@@ -2366,19 +2366,26 @@ async function loadTradeOptions(index, btn) {
   });
   if (btn) { btn.className = 'btn btn-a'; btn.style.padding = '5px 12px'; btn.style.fontSize = '10px'; }
   APP.options.index = index;
-  $('to-status').innerHTML = '<span class="spin"></span> Loading ' + index + '...';
 
-  // If F&O already loaded for this index, reuse
-  if (APP.fno.data && APP.fno.index === index) {
+  // If F&O already loaded for same index, just reuse — no new API call
+  if (APP.fno.data?.records?.data?.length && APP.fno.index === index) {
     renderAllTradeOptions();
     $('to-status').textContent = index + ' loaded ✓';
     return;
   }
-  // Otherwise load F&O data
+
+  $('to-status').innerHTML = '<span class="spin"></span> Loading ' + index + '...';
   APP.fno.index = index;
-  await loadFnO(index, $('fno-' + index.toLowerCase()));
-  renderAllTradeOptions();
-  $('to-status').textContent = index + ' loaded ✓';
+
+  // Load F&O data — this shares data with F&O dashboard
+  await loadFnO(index, null);
+
+  if (APP.fno.data?.records?.data?.length) {
+    renderAllTradeOptions();
+    $('to-status').textContent = index + ' loaded ✓';
+  } else {
+    $('to-status').textContent = index + ' — data not available (try re-login)';
+  }
 }
 
 function renderAllTradeOptions() {
@@ -3388,8 +3395,12 @@ function showPage(page, btn) {
   if (page === 'options') {
     // Load astro from localStorage
     try { APP.options.astroLevels = JSON.parse(localStorage.getItem('khabar_astro') || '[]'); } catch(e) {}
-    if (APP.fno.data) renderAllTradeOptions();
-    else loadTradeOptions('NIFTY', $('to-nifty'));
+    // Reuse F&O data if already loaded (from any dashboard), don't re-fetch
+    if (APP.fno.data?.records?.data?.length) {
+      renderAllTradeOptions();
+    } else {
+      loadTradeOptions('NIFTY', $('to-nifty'));
+    }
   }
 }
 
