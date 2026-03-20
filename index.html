@@ -72,7 +72,8 @@ body{background:var(--bg);color:var(--t);font-family:var(--f2);font-size:12px;ov
 .oc-table{width:100%;border-collapse:collapse;font-size:12px}
 .oc-table td,.oc-table th{padding:7px 8px;text-align:center;border-bottom:1px solid var(--bd)}
 .oc-table th{font-size:10px;color:var(--m);letter-spacing:1px;background:var(--s2);font-weight:700}
-.oc-table tr:hover td{background:rgba(255,255,255,.02)}
+.oc-table tr:hover td{background:rgba(0,204,255,.05);cursor:pointer}
+.oc-table tr.oc-selected td{background:rgba(0,204,255,.08)!important;box-shadow:inset 0 1px 0 var(--a),inset 0 -1px 0 var(--a)}
 .oc-atm{background:rgba(255,193,7,.08)!important;font-weight:700}
 @keyframes oi-flash{0%,100%{background:transparent}50%{background:rgba(255,193,7,.25)}}
 @keyframes oi-spike-ce{0%,100%{box-shadow:none}50%{box-shadow:inset 4px 0 0 var(--g)}}
@@ -520,7 +521,12 @@ body{background:var(--bg);color:var(--t);font-family:var(--f2);font-size:12px;ov
       <div id="iv-analysis" style="max-height:280px;overflow-y:auto"><div style="color:var(--m);text-align:center;padding:15px">Load option chain to see IV data</div></div>
     </div>
     <div class="pn">
-      <div class="ph"><div class="pt">🧮 GREEKS — ATM OPTIONS</div><span class="badge ba">LIVE</span></div>
+      <div class="ph"><div class="pt">🧮 GREEKS — OPTION ANALYSIS</div><span class="badge ba">LIVE</span></div>
+      <div style="margin-bottom:8px;display:flex;align-items:center;gap:8px">
+        <label style="font-size:10px;color:var(--m)">STRIKE:</label>
+        <select id="greeks-strike-sel" onchange="updateGreeksForStrike()" style="background:var(--s2);border:1px solid var(--bd);color:var(--t);padding:5px 10px;border-radius:5px;font-family:var(--f2);font-size:11px;min-width:100px"></select>
+        <span style="font-size:9px;color:var(--a);cursor:pointer" onclick="resetGreeksToATM()">↺ ATM</span>
+      </div>
       <div id="greeks-panel"><div style="color:var(--m);text-align:center;padding:15px">Load option chain first</div></div>
     </div>
   </div>
@@ -1868,13 +1874,13 @@ function renderOCTable(data, atm, spot) {
     const ceChgColor = (ce.changeinOpenInterest||0) > 0 ? 'var(--g)' : (ce.changeinOpenInterest||0) < 0 ? 'var(--r)' : 'var(--m)';
     const peChgColor = (pe.changeinOpenInterest||0) > 0 ? 'var(--r)' : (pe.changeinOpenInterest||0) < 0 ? 'var(--g)' : 'var(--m)';
 
-    return `<tr class="${isATM?'oc-atm':''}">
+    return `<tr class="${isATM?'oc-atm':''}" style="cursor:pointer" onclick="selectStrike(${r.strikePrice})" title="Click to view Greeks for ${r.strikePrice}">
       <td style="${itm_call}">${fmtL(ce.openInterest||0)}<div style="background:var(--g);height:3px;width:${ceOIpct}%;border-radius:2px;margin-top:2px"></div></td>
       <td style="color:${ceChgColor};${itm_call}">${fmtL(ce.changeinOpenInterest||0)}</td>
       <td style="${itm_call}">${fmtL(ce.totalTradedVolume||0)}</td>
       <td style="color:var(--m);${itm_call}">${(ce.impliedVolatility||0).toFixed(1)}</td>
       <td style="font-weight:700;${itm_call}">${(ce.lastPrice||0).toFixed(2)}</td>
-      <td style="font-weight:700;color:var(--y);font-size:11px">${r.strikePrice}</td>
+      <td style="font-weight:700;color:var(--y);font-size:12px">${r.strikePrice}</td>
       <td style="font-weight:700;${itm_put}">${(pe.lastPrice||0).toFixed(2)}</td>
       <td style="color:var(--m);${itm_put}">${(pe.impliedVolatility||0).toFixed(1)}</td>
       <td style="${itm_put}">${fmtL(pe.totalTradedVolume||0)}</td>
@@ -2313,51 +2319,160 @@ function renderIVAnalysis(data, spot) {
 }
 
 function renderGreeks(data, spot) {
-  // Find ATM strike
-  const atm = data.reduce((best, r) => Math.abs(r.strikePrice - spot) < Math.abs(best.strikePrice - spot) ? r : best, data[0]);
-  if (!atm) return;
+  // Store data for strike selection
+  APP.fno.ocDataForGreeks = data;
+  APP.fno.spotForGreeks = spot;
 
-  const ce = atm.CE || {}, pe = atm.PE || {};
-  // Approximate Greeks from available data
-  const daysToExpiry = 7; // approximate
+  // Populate strike dropdown
+  const sel = $('greeks-strike-sel');
+  if (sel) {
+    const strikes = data.map(r => r.strikePrice).sort((a, b) => a - b);
+    const atm = strikes.reduce((best, s) => Math.abs(s - spot) < Math.abs(best - spot) ? s : best, strikes[0]);
+    const selectedStrike = APP.fno.selectedStrike || atm;
+    sel.innerHTML = strikes.map(s => {
+      const label = s === atm ? `${s} (ATM)` : (s < spot ? `${s} ITM-CE` : `${s} OTM-CE`);
+      return `<option value="${s}" ${s === selectedStrike ? 'selected' : ''}>${label}</option>`;
+    }).join('');
+    if (!APP.fno.selectedStrike) APP.fno.selectedStrike = atm;
+  }
+
+  renderGreeksForStrike(APP.fno.selectedStrike || null, data, spot);
+}
+
+function renderGreeksForStrike(strike, data, spot) {
+  data = data || APP.fno.ocDataForGreeks;
+  spot = spot || APP.fno.spotForGreeks;
+  if (!data || !data.length) return;
+
+  const atm = data.reduce((best, r) => Math.abs(r.strikePrice - spot) < Math.abs(best.strikePrice - spot) ? r : best, data[0]);
+  const row = strike ? data.find(r => r.strikePrice === strike) : atm;
+  if (!row) return;
+
+  const ce = row.CE || {}, pe = row.PE || {};
+  const strikePrice = row.strikePrice;
+
+  // Better Greeks approximation
+  const expiry = APP.fno.expiry;
+  let daysToExpiry = 7;
+  if (expiry) {
+    // Parse expiry and calculate days
+    try {
+      const parts = expiry.split('-');
+      let expDate;
+      if (parts[0].length === 4) expDate = new Date(expiry); // 2026-03-27
+      else expDate = new Date(parts[2] + '-' + (['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].indexOf(parts[1]) + 1).toString().padStart(2, '0') + '-' + parts[0]);
+      daysToExpiry = Math.max(1, Math.ceil((expDate - new Date()) / 86400000));
+    } catch(e) {}
+  }
+  const T = daysToExpiry / 365;
   const ceIV = (ce.impliedVolatility || 15) / 100;
   const peIV = (pe.impliedVolatility || 15) / 100;
-  // Black-Scholes approximations for ATM
-  const ceDelta = 0.5 + (ceIV > 0.1 ? 0.02 : -0.02);
-  const peDelta = -(0.5 + (peIV > 0.1 ? 0.02 : -0.02));
-  const gamma = (1 / (spot * ceIV * Math.sqrt(daysToExpiry / 365))) * 0.4;
-  const ceTheta = -(spot * ceIV / (2 * Math.sqrt(daysToExpiry / 365 * 2 * Math.PI))) / 365;
-  const peTheta = ceTheta;
-  const ceVega = spot * Math.sqrt(daysToExpiry / 365) / (100 * Math.sqrt(2 * Math.PI));
+  const r = 0.065; // risk-free rate ~6.5%
+
+  // Moneyness
+  const moneyness = spot > 0 ? strikePrice / spot : 1;
+  const isITMcall = strikePrice < spot;
+  const isATM = Math.abs(strikePrice - spot) / spot < 0.005;
+  const intrinsicCE = Math.max(0, spot - strikePrice);
+  const intrinsicPE = Math.max(0, strikePrice - spot);
+  const timeValCE = Math.max(0, (ce.lastPrice || 0) - intrinsicCE);
+  const timeValPE = Math.max(0, (pe.lastPrice || 0) - intrinsicPE);
+
+  // Delta approximation based on moneyness
+  let ceDelta, peDelta;
+  if (isATM) { ceDelta = 0.50; peDelta = -0.50; }
+  else if (isITMcall) { ceDelta = 0.5 + Math.min(0.48, (spot - strikePrice) / spot * 3); peDelta = ceDelta - 1; }
+  else { ceDelta = 0.5 - Math.min(0.48, (strikePrice - spot) / spot * 3); peDelta = ceDelta - 1; }
+
+  const gamma = T > 0 ? (Math.exp(-0.5 * Math.pow(Math.log(spot / strikePrice), 2) / (ceIV * ceIV * T)) / (spot * ceIV * Math.sqrt(2 * Math.PI * T))) * 0.5 : 0;
+  const ceTheta = -(spot * ceIV / (2 * Math.sqrt(T > 0 ? T : 0.01) * Math.sqrt(2 * Math.PI))) / 365;
+  const ceVega = spot * Math.sqrt(T > 0 ? T : 0.01) / (100 * Math.sqrt(2 * Math.PI)) * Math.exp(-0.5 * Math.pow(Math.log(moneyness), 2) / (ceIV * ceIV * (T > 0 ? T : 0.01)));
+
+  const strikeLabel = isATM ? '● ATM' : (isITMcall ? '◆ ITM for CE / OTM for PE' : '◇ OTM for CE / ITM for PE');
+  const strikeColor = isATM ? 'var(--y)' : (isITMcall ? 'var(--g)' : 'var(--r)');
+  const distPct = spot > 0 ? ((strikePrice - spot) / spot * 100).toFixed(2) : '0';
 
   $('greeks-panel').innerHTML = `
-    <div style="text-align:center;margin-bottom:10px;font-size:11px;color:var(--m)">ATM Strike: <b style="color:var(--y)">${atm.strikePrice}</b></div>
+    <div style="text-align:center;margin-bottom:10px">
+      <div style="font-size:13px;color:var(--t);font-weight:700">Strike: <span style="color:var(--y);font-size:16px">${strikePrice}</span></div>
+      <div style="font-size:11px;color:${strikeColor};margin-top:3px">${strikeLabel} · ${distPct}% from spot · ${daysToExpiry}d to expiry</div>
+    </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-      <div style="background:var(--bg);border-radius:6px;padding:10px">
-        <div style="font-size:9px;color:var(--g);letter-spacing:1px;margin-bottom:6px">CALL ${atm.strikePrice} CE</div>
-        <div style="font-size:11px;line-height:2">
-          <div>LTP: <b style="color:var(--t)">${(ce.lastPrice || 0).toFixed(2)}</b></div>
-          <div>IV: <b style="color:var(--a)">${(ce.impliedVolatility || 0).toFixed(1)}%</b></div>
-          <div>Delta: <b style="color:var(--g)">${ceDelta.toFixed(3)}</b></div>
-          <div>Gamma: <b style="color:var(--p)">${gamma.toFixed(4)}</b></div>
-          <div>Theta: <b style="color:var(--r)">${ceTheta.toFixed(2)}</b></div>
-          <div>Vega: <b style="color:var(--a)">${ceVega.toFixed(2)}</b></div>
-          <div>OI: <b style="color:var(--m)">${fmtL(ce.openInterest || 0)}</b></div>
+      <div style="background:var(--bg);border-radius:8px;padding:12px;border-top:3px solid var(--g)">
+        <div style="font-size:11px;color:var(--g);letter-spacing:1px;margin-bottom:8px;font-weight:700">📞 CALL ${strikePrice} CE</div>
+        <div style="font-size:12px;line-height:2.2">
+          <div style="display:flex;justify-content:space-between">LTP <b style="color:var(--t)">₹${(ce.lastPrice || 0).toFixed(2)}</b></div>
+          <div style="display:flex;justify-content:space-between">Change <b style="color:${(ce.change||0) >= 0 ? 'var(--g)' : 'var(--r)'}">${(ce.change||0) >= 0 ? '+' : ''}${(ce.change || 0).toFixed(2)}</b></div>
+          <div style="display:flex;justify-content:space-between">IV <b style="color:var(--a)">${(ce.impliedVolatility || 0).toFixed(1)}%</b></div>
+          <div style="display:flex;justify-content:space-between">Delta <b style="color:var(--g)">${ceDelta.toFixed(3)}</b></div>
+          <div style="display:flex;justify-content:space-between">Gamma <b style="color:var(--p)">${gamma.toFixed(5)}</b></div>
+          <div style="display:flex;justify-content:space-between">Theta <b style="color:var(--r)">${ceTheta.toFixed(2)}</b></div>
+          <div style="display:flex;justify-content:space-between">Vega <b style="color:var(--a)">${ceVega.toFixed(2)}</b></div>
+          <div style="display:flex;justify-content:space-between">OI <b style="color:var(--m)">${fmtL(ce.openInterest || 0)}</b></div>
+          <div style="display:flex;justify-content:space-between">OI Chg <b style="color:${(ce.changeinOpenInterest||0)>0?'var(--g)':'var(--r)'}">${fmtL(ce.changeinOpenInterest || 0)}</b></div>
+          <div style="display:flex;justify-content:space-between">Volume <b>${fmtL(ce.totalTradedVolume || 0)}</b></div>
+          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--m)">Intrinsic <b>₹${intrinsicCE.toFixed(2)}</b></div>
+          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--m)">Time Val <b>₹${timeValCE.toFixed(2)}</b></div>
         </div>
       </div>
-      <div style="background:var(--bg);border-radius:6px;padding:10px">
-        <div style="font-size:9px;color:var(--r);letter-spacing:1px;margin-bottom:6px">PUT ${atm.strikePrice} PE</div>
-        <div style="font-size:11px;line-height:2">
-          <div>LTP: <b style="color:var(--t)">${(pe.lastPrice || 0).toFixed(2)}</b></div>
-          <div>IV: <b style="color:var(--a)">${(pe.impliedVolatility || 0).toFixed(1)}%</b></div>
-          <div>Delta: <b style="color:var(--r)">${peDelta.toFixed(3)}</b></div>
-          <div>Gamma: <b style="color:var(--p)">${gamma.toFixed(4)}</b></div>
-          <div>Theta: <b style="color:var(--r)">${peTheta.toFixed(2)}</b></div>
-          <div>Vega: <b style="color:var(--a)">${ceVega.toFixed(2)}</b></div>
-          <div>OI: <b style="color:var(--m)">${fmtL(pe.openInterest || 0)}</b></div>
+      <div style="background:var(--bg);border-radius:8px;padding:12px;border-top:3px solid var(--r)">
+        <div style="font-size:11px;color:var(--r);letter-spacing:1px;margin-bottom:8px;font-weight:700">📍 PUT ${strikePrice} PE</div>
+        <div style="font-size:12px;line-height:2.2">
+          <div style="display:flex;justify-content:space-between">LTP <b style="color:var(--t)">₹${(pe.lastPrice || 0).toFixed(2)}</b></div>
+          <div style="display:flex;justify-content:space-between">Change <b style="color:${(pe.change||0) >= 0 ? 'var(--g)' : 'var(--r)'}">${(pe.change||0) >= 0 ? '+' : ''}${(pe.change || 0).toFixed(2)}</b></div>
+          <div style="display:flex;justify-content:space-between">IV <b style="color:var(--a)">${(pe.impliedVolatility || 0).toFixed(1)}%</b></div>
+          <div style="display:flex;justify-content:space-between">Delta <b style="color:var(--r)">${peDelta.toFixed(3)}</b></div>
+          <div style="display:flex;justify-content:space-between">Gamma <b style="color:var(--p)">${gamma.toFixed(5)}</b></div>
+          <div style="display:flex;justify-content:space-between">Theta <b style="color:var(--r)">${ceTheta.toFixed(2)}</b></div>
+          <div style="display:flex;justify-content:space-between">Vega <b style="color:var(--a)">${ceVega.toFixed(2)}</b></div>
+          <div style="display:flex;justify-content:space-between">OI <b style="color:var(--m)">${fmtL(pe.openInterest || 0)}</b></div>
+          <div style="display:flex;justify-content:space-between">OI Chg <b style="color:${(pe.changeinOpenInterest||0)>0?'var(--r)':'var(--g)'}">${fmtL(pe.changeinOpenInterest || 0)}</b></div>
+          <div style="display:flex;justify-content:space-between">Volume <b>${fmtL(pe.totalTradedVolume || 0)}</b></div>
+          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--m)">Intrinsic <b>₹${intrinsicPE.toFixed(2)}</b></div>
+          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--m)">Time Val <b>₹${timeValPE.toFixed(2)}</b></div>
         </div>
       </div>
     </div>`;
+}
+
+function selectStrike(strike) {
+  APP.fno.selectedStrike = strike;
+  const sel = $('greeks-strike-sel');
+  if (sel) sel.value = strike;
+  renderGreeksForStrike(strike);
+  // Highlight selected row
+  document.querySelectorAll('#oc-body tr').forEach(row => row.classList.remove('oc-selected'));
+  document.querySelectorAll('#oc-body tr').forEach(row => {
+    // Match strike in the 6th column (index 5)
+    const cells = row.querySelectorAll('td');
+    if (cells.length >= 6 && parseInt(cells[5]?.textContent) === strike) {
+      row.classList.add('oc-selected');
+    }
+  });
+  // Scroll to Greeks panel
+  $('greeks-panel').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  toast(`Strike ${strike} selected — Greeks updated`, 'info');
+}
+
+function updateGreeksForStrike() {
+  const sel = $('greeks-strike-sel');
+  if (sel) {
+    const strike = parseInt(sel.value);
+    APP.fno.selectedStrike = strike;
+    renderGreeksForStrike(strike);
+  }
+}
+
+function resetGreeksToATM() {
+  const data = APP.fno.ocDataForGreeks;
+  const spot = APP.fno.spotForGreeks;
+  if (!data || !spot) return;
+  const strikes = data.map(r => r.strikePrice);
+  const atm = strikes.reduce((best, s) => Math.abs(s - spot) < Math.abs(best - spot) ? s : best, strikes[0]);
+  APP.fno.selectedStrike = atm;
+  const sel = $('greeks-strike-sel');
+  if (sel) sel.value = atm;
+  renderGreeksForStrike(atm);
 }
 
 function renderStraddlePanel(data, spot) {
@@ -2554,20 +2669,58 @@ async function fetchGlobalData() {
     ...FOREX_SYMBOLS.map(s => s.sym),
     ...BOND_SYMBOLS.map(s => s.sym),
     ...CURRENCY_PAIRS.map(s => s.sym),
-    'NIFTY 50' // for India VIX reference
+    'NIFTY 50'
   ];
-  // Deduplicate
   const unique = [...new Set(allSyms)];
+
+  // Split into batches of 8 to avoid Yahoo rate-limiting
+  const batchSize = 8;
+  const batches = [];
+  for (let i = 0; i < unique.length; i += batchSize) {
+    batches.push(unique.slice(i, i + batchSize));
+  }
+
+  const allData = {};
   try {
-    const r = await fetch(NSE_API, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'global-data', symbols: unique, range: '2d', interval: '1d' })
+    // Fetch all batches in parallel
+    const results = await Promise.allSettled(
+      batches.map(batch =>
+        fetch(NSE_API, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'global-data', symbols: batch, range: '2d', interval: '1d' })
+        }).then(r => r.ok ? r.json() : null)
+      )
+    );
+
+    results.forEach(r => {
+      if (r.status === 'fulfilled' && r.value) {
+        Object.assign(allData, r.value);
+      }
     });
-    if (!r.ok) return null;
-    const data = await r.json();
-    PULSE.globalData = data;
-    return data;
+
+    // Finnhub fallback for US indices if Yahoo failed
+    const usSyms = GLOBAL_SYMBOLS.us.map(s => s.sym);
+    const missingUS = usSyms.filter(s => !allData[s] || allData[s].error || !allData[s].price);
+    if (missingUS.length > 0) {
+      try {
+        const fhData = await finnhubApi('indices');
+        if (fhData?.data) {
+          const FH_MAP = { '^GSPC': '^GSPC', '^DJI': '^DJI', '^IXIC': '^IXIC', '^RUT': '^RUT',
+                           '^FTSE': '^FTSE', '^GDAXI': '^GDAXI', '^FCHI': '^FCHI',
+                           '^N225': '^N225', '^HSI': '^HSI', '000001.SS': '000001.SS' };
+          for (const [sym, fhSym] of Object.entries(FH_MAP)) {
+            if (fhData.data[fhSym] && (!allData[sym] || allData[sym].error || !allData[sym].price)) {
+              const q = fhData.data[fhSym];
+              allData[sym] = { price: q.price, prev: q.price / (1 + (q.change || 0) / 100), change: q.change || 0, high: q.high || 0, low: q.low || 0, name: sym, exchange: 'Finnhub' };
+            }
+          }
+        }
+      } catch(e) { console.warn('Finnhub fallback:', e); }
+    }
+
+    PULSE.globalData = allData;
+    return allData;
   } catch (e) {
     console.error('fetchGlobalData:', e);
     return null;
