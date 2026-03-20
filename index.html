@@ -3811,13 +3811,25 @@ function renderBondYields() {
   bondList.forEach(s => {
     const q = d[s.sym];
     if (q && !q.error) {
-      const yieldVal = q.price;
-      const color = q.change >= 0 ? 'var(--r)' : 'var(--g)'; // Rising yields = bearish for equity
-      html += `<div class="pulse-card" style="border-left:3px solid ${color}">
-        <div class="pulse-lbl">${s.flag} ${s.name}</div>
-        <div class="pulse-val" style="font-size:20px">${yieldVal.toFixed(3)}%</div>
-        <div class="pulse-chg" style="color:${color}">${q.change >= 0 ? '▲' : '▼'} ${Math.abs(q.change).toFixed(2)}%</div>
-      </div>`;
+      const isETFProxy = q.price > 10; // ETF price vs actual yield
+      if (isETFProxy) {
+        // Bond ETF proxy (TLT/IEF) — bond price down = yields up = bearish
+        const color = q.change <= 0 ? 'var(--r)' : 'var(--g)';
+        const yieldDir = q.change <= 0 ? 'RISING' : 'FALLING';
+        html += `<div class="pulse-card" style="border-left:3px solid ${color}">
+          <div class="pulse-lbl">${s.flag} ${s.name}</div>
+          <div class="pulse-val" style="font-size:16px;color:${color}">Yields ${yieldDir}</div>
+          <div class="pulse-chg" style="color:${color}">${q.change >= 0 ? '▲' : '▼'} ${Math.abs(q.change).toFixed(2)}% (ETF)</div>
+        </div>`;
+      } else {
+        // Actual yield value
+        const color = q.change >= 0 ? 'var(--r)' : 'var(--g)';
+        html += `<div class="pulse-card" style="border-left:3px solid ${color}">
+          <div class="pulse-lbl">${s.flag} ${s.name}</div>
+          <div class="pulse-val" style="font-size:20px">${q.price.toFixed(3)}%</div>
+          <div class="pulse-chg" style="color:${color}">${q.change >= 0 ? '▲' : '▼'} ${Math.abs(q.change).toFixed(2)}%</div>
+        </div>`;
+      }
     }
   });
 
@@ -3839,10 +3851,19 @@ function renderBondYields() {
   const us10 = d['^TNX'];
   const sigEl = $('bond-signal');
   if (us10 && !us10.error && sigEl) {
-    const y = us10.price;
-    if (y > 4.5) sigEl.innerHTML = '<span style="color:var(--r)">⚠ HIGH YIELDS — Risk-off, bearish for equities</span>';
-    else if (y > 3.5) sigEl.innerHTML = '<span style="color:var(--y)">MODERATE YIELDS — Neutral to cautious</span>';
-    else sigEl.innerHTML = '<span style="color:var(--g)">LOW YIELDS — Risk-on, bullish for equities</span>';
+    const isETF = us10.price > 10;
+    if (isETF) {
+      // TLT ETF proxy: price falling = yields rising = bearish
+      const chg = us10.change || 0;
+      if (chg < -1) sigEl.innerHTML = '<span style="color:var(--r)">⚠ YIELDS RISING FAST — Risk-off, bearish for equities</span>';
+      else if (chg < 0) sigEl.innerHTML = '<span style="color:var(--y)">YIELDS RISING — Neutral to cautious</span>';
+      else sigEl.innerHTML = '<span style="color:var(--g)">YIELDS STABLE/FALLING — Risk-on, bullish</span>';
+    } else {
+      const y = us10.price;
+      if (y > 4.5) sigEl.innerHTML = '<span style="color:var(--r)">⚠ HIGH YIELDS — Risk-off, bearish for equities</span>';
+      else if (y > 3.5) sigEl.innerHTML = '<span style="color:var(--y)">MODERATE YIELDS — Neutral to cautious</span>';
+      else sigEl.innerHTML = '<span style="color:var(--g)">LOW YIELDS — Risk-on, bullish for equities</span>';
+    }
   }
 }
 
