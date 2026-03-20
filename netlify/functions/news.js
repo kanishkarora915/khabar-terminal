@@ -2,7 +2,7 @@
 const https = require('https');
 
 let newsCache = { data: null, ts: 0 };
-const NEWS_TTL = 120000; // 2 min
+const NEWS_TTL = 40000; // 40s — fast refresh for market-moving news
 
 function fetchURL(url) {
   return new Promise((resolve, reject) => {
@@ -29,7 +29,7 @@ function parseRSS(xml, source) {
     if (title) {
       const clean = desc.replace(/<[^>]*>/g, '').trim().slice(0, 200);
       // Detect high impact
-      const hi = /RBI|SEBI|rate cut|rate hike|FII|DII|GDP|inflation|crash|circuit|halt|ban|IPO|result|earning|profit|loss|acqui|merger|scam|fraud|FPI|repo rate/i.test(title);
+      const hi = /RBI|SEBI|rate cut|rate hike|FII|DII|GDP|inflation|crash|circuit|halt|ban|IPO|result|earning|profit|loss|acqui|merger|scam|fraud|FPI|repo rate|nifty|sensex|bank nifty|market crash|rally|selloff|sell-off|bull run|bear|bloodbath|tank|surge|plunge|soar|breakout|breakdown|tariff|war|sanction|recession|CPI|PMI|Fed|budget|tax|demerger|bonus|split|buyback|dividend|Q[1-4]\s*result/i.test(title);
       items.push({ title: title.trim(), link: link.trim(), time: pubDate ? new Date(pubDate).toISOString() : new Date().toISOString(), desc: clean, source, highImpact: hi });
     }
   }
@@ -48,8 +48,13 @@ exports.handler = async (event) => {
     const feeds = [
       { url: 'https://www.moneycontrol.com/rss/MCtopnews.xml', source: 'MoneyControl' },
       { url: 'https://www.moneycontrol.com/rss/marketreports.xml', source: 'MC Markets' },
+      { url: 'https://www.moneycontrol.com/rss/latestnews.xml', source: 'MC Latest' },
       { url: 'https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms', source: 'ET Markets' },
+      { url: 'https://economictimes.indiatimes.com/rssfeedstopnews.cms', source: 'ET Top' },
       { url: 'https://www.livemint.com/rss/markets', source: 'LiveMint' },
+      { url: 'https://www.livemint.com/rss/money', source: 'Mint Money' },
+      { url: 'https://www.business-standard.com/rss/markets-106.rss', source: 'BS Markets' },
+      { url: 'https://www.ndtv.com/rss/profit/latest', source: 'NDTV Profit' },
     ];
 
     const results = await Promise.allSettled(feeds.map(async f => {
@@ -60,7 +65,7 @@ exports.handler = async (event) => {
     let all = [];
     results.forEach(r => { if (r.status === 'fulfilled') all = all.concat(r.value); });
     all.sort((a, b) => new Date(b.time) - new Date(a.time));
-    all = all.slice(0, 60);
+    all = all.slice(0, 80);
 
     newsCache = { data: all, ts: Date.now() };
     return { statusCode: 200, headers: H, body: JSON.stringify(all) };

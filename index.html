@@ -99,14 +99,32 @@ body{background:var(--bg);color:var(--t);font-family:var(--f2);font-size:12px;ov
 .toast{position:fixed;bottom:16px;right:16px;background:var(--s1);border:1px solid var(--bd);padding:10px 16px;border-radius:8px;font-size:11px;z-index:9999;transform:translateY(60px);opacity:0;transition:all .3s;max-width:360px}
 .toast.show{transform:translateY(0);opacity:1}
 .toast.ok{border-left:3px solid var(--g)}.toast.err{border-left:3px solid var(--r)}.toast.info{border-left:3px solid var(--a)}
-.news-popup{position:fixed;top:60px;right:16px;width:360px;background:var(--s1);border:1px solid var(--r);border-radius:10px;padding:14px;z-index:9998;transform:translateX(400px);transition:transform .4s;box-shadow:0 8px 30px rgba(0,0,0,.5)}
+.news-popup{position:fixed;top:60px;right:16px;width:380px;background:linear-gradient(135deg,#1a1a2e,#16213e);border:1px solid var(--r);border-radius:12px;padding:16px;z-index:9998;transform:translateX(450px);transition:transform .4s cubic-bezier(.25,.8,.25,1);box-shadow:0 12px 40px rgba(255,51,85,.15),0 4px 12px rgba(0,0,0,.5)}
 .news-popup.show{transform:translateX(0)}
-.news-popup .np-title{font-family:var(--f1);font-size:12px;font-weight:700;margin-bottom:4px}
-.news-popup .np-src{font-size:9px;color:var(--r);letter-spacing:1px}
-.news-item{padding:8px 0;border-bottom:1px solid var(--bd);font-size:10px;line-height:1.6}
+.news-popup .np-title{font-family:var(--f1);font-size:13px;font-weight:700;margin-bottom:4px;line-height:1.5}
+.news-popup .np-src{font-size:9px;color:var(--r);letter-spacing:1px;animation:pulse-red 1.5s ease-in-out infinite}
+@keyframes pulse-red{0%,100%{opacity:1}50%{opacity:.5}}
+.news-item{padding:10px 0;border-bottom:1px solid var(--bd);font-size:10px;line-height:1.6;cursor:pointer;transition:background .2s}
+.news-item:hover{background:rgba(0,204,255,.03);padding-left:4px}
 .news-item:last-child{border-bottom:none}
-.news-hi{border-left:2px solid var(--r);padding-left:8px}
-.news-src{font-size:8px;padding:2px 5px;border-radius:3px;background:rgba(0,204,255,.1);color:var(--a);margin-right:4px}
+.news-hi{border-left:3px solid var(--r);padding-left:10px;background:rgba(255,51,85,.03);animation:news-glow 3s ease-in-out}
+@keyframes news-glow{0%{background:rgba(255,51,85,.15)}100%{background:rgba(255,51,85,.03)}}
+.news-new{border-left:3px solid var(--a);padding-left:10px;animation:news-new-glow 2s ease-in-out}
+@keyframes news-new-glow{0%{background:rgba(0,204,255,.15)}100%{background:transparent}}
+.news-src{font-size:8px;padding:2px 6px;border-radius:3px;background:rgba(0,204,255,.1);color:var(--a);margin-right:4px}
+.news-src-finnhub{background:rgba(255,165,0,.15);color:#ffa500}
+.news-src-global{background:rgba(156,39,176,.15);color:#ce93d8}
+.news-badge-new{font-size:7px;padding:1px 5px;border-radius:3px;background:var(--r);color:white;font-weight:700;letter-spacing:.5px;margin-left:4px;animation:pulse-red 1.5s ease-in-out infinite}
+.news-badge-live{font-size:7px;padding:1px 5px;border-radius:3px;background:var(--g);color:#0a0e17;font-weight:700;letter-spacing:.5px;margin-left:4px}
+.breaking-ticker{position:fixed;top:52px;left:0;right:0;background:linear-gradient(90deg,#1a0000,#2d0000,#1a0000);border-bottom:1px solid rgba(255,51,85,.3);z-index:9990;height:28px;overflow:hidden;display:none}
+.breaking-ticker.active{display:flex;align-items:center}
+.breaking-ticker .bt-label{background:var(--r);color:white;font-size:8px;font-weight:800;letter-spacing:1px;padding:4px 10px;white-space:nowrap;animation:pulse-red 1.5s ease-in-out infinite}
+.breaking-ticker .bt-scroll{flex:1;overflow:hidden;margin-left:8px}
+.breaking-ticker .bt-text{display:inline-block;white-space:nowrap;animation:ticker-scroll 30s linear infinite;font-size:11px;font-weight:600;color:var(--r)}
+@keyframes ticker-scroll{0%{transform:translateX(100%)}100%{transform:translateX(-100%)}}
+.news-filter-bar{display:flex;gap:4px;margin-bottom:8px;flex-wrap:wrap}
+.news-filter-btn{font-size:8px;padding:3px 8px;border-radius:10px;border:1px solid var(--bd);background:transparent;color:var(--m);cursor:pointer;letter-spacing:.5px;transition:all .2s}
+.news-filter-btn.active,.news-filter-btn:hover{border-color:var(--a);color:var(--a);background:rgba(0,204,255,.08)}
 .spin{display:inline-block;width:12px;height:12px;border:2px solid var(--bd);border-top-color:var(--a);border-radius:50%;animation:sp .6s linear infinite;vertical-align:middle}
 @keyframes sp{to{transform:rotate(360deg)}}
 .oc-summary-card{text-align:center}.oc-big{font-family:var(--f1);font-size:26px;font-weight:800}
@@ -181,14 +199,25 @@ body{background:var(--bg);color:var(--t);font-family:var(--f2);font-size:12px;ov
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
+<!-- BREAKING NEWS TICKER -->
+<div class="breaking-ticker" id="breaking-ticker">
+  <div class="bt-label">🔴 BREAKING</div>
+  <div class="bt-scroll"><span class="bt-text" id="bt-text"></span></div>
+  <span style="cursor:pointer;color:var(--m);font-size:12px;padding:0 10px" onclick="dismissTicker()">✕</span>
+</div>
+
 <!-- NEWS POPUP -->
 <div class="news-popup" id="news-popup">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-    <span class="np-src">🔴 BREAKING</span>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+    <span class="np-src">🔴 BREAKING NEWS</span>
     <span style="cursor:pointer;color:var(--m);font-size:14px" onclick="closeNewsPopup()">✕</span>
   </div>
   <div class="np-title" id="np-title"></div>
-  <div style="font-size:10px;color:var(--m);margin-top:4px" id="np-desc"></div>
+  <div style="font-size:10px;color:var(--m);margin-top:4px;line-height:1.6" id="np-desc"></div>
+  <div style="font-size:9px;color:var(--a);margin-top:8px;display:flex;justify-content:space-between;align-items:center">
+    <span id="np-source-time"></span>
+    <span style="cursor:pointer;text-decoration:underline" onclick="closeNewsPopup()">Dismiss</span>
+  </div>
 </div>
 
 <!-- HEADER -->
@@ -320,8 +349,15 @@ body{background:var(--bg);color:var(--t);font-family:var(--f2);font-size:12px;ov
       <div class="shg" id="sector-heatmap"></div>
     </div>
     <div class="pn">
-      <div class="ph"><div class="pt">📰 LIVE NEWS</div><span class="badge br" id="news-count">—</span></div>
-      <div id="news-feed" style="max-height:300px;overflow-y:auto"><div style="color:var(--m);text-align:center;padding:20px"><span class="spin"></span> Loading news...</div></div>
+      <div class="ph"><div class="pt">📰 LIVE NEWS</div><span class="badge br" id="news-count">—</span><span class="badge ba" id="news-last-update" style="margin-left:4px;font-size:8px">—</span></div>
+      <div class="news-filter-bar" id="news-filters">
+        <button class="news-filter-btn active" onclick="filterNews('all',this)">ALL</button>
+        <button class="news-filter-btn" onclick="filterNews('breaking',this)">🔴 BREAKING</button>
+        <button class="news-filter-btn" onclick="filterNews('india',this)">🇮🇳 INDIA</button>
+        <button class="news-filter-btn" onclick="filterNews('global',this)">🌐 GLOBAL</button>
+        <button class="news-filter-btn" onclick="filterNews('market-move',this)">📊 MOVERS</button>
+      </div>
+      <div id="news-feed" style="max-height:340px;overflow-y:auto"><div style="color:var(--m);text-align:center;padding:20px"><span class="spin"></span> Loading news...</div></div>
     </div>
   </div>
 
@@ -654,6 +690,30 @@ body{background:var(--bg);color:var(--t);font-family:var(--f2);font-size:12px;ov
     </div>
   </div>
 
+  <!-- ROW 7: MARKET-MOVING NEWS FEED -->
+  <div class="g2">
+    <div class="pn">
+      <div class="ph"><div class="pt">📰 MARKET-MOVING NEWS — INDIA</div><span class="badge br">LIVE</span></div>
+      <div class="news-filter-bar">
+        <button class="news-filter-btn active" onclick="filterPulseNews('all',this,'pulse-india-news')">ALL</button>
+        <button class="news-filter-btn" onclick="filterPulseNews('breaking',this,'pulse-india-news')">🔴 HIGH IMPACT</button>
+        <button class="news-filter-btn" onclick="filterPulseNews('rbi',this,'pulse-india-news')">🏛 RBI/SEBI</button>
+        <button class="news-filter-btn" onclick="filterPulseNews('results',this,'pulse-india-news')">📊 RESULTS</button>
+      </div>
+      <div id="pulse-india-news" style="max-height:400px;overflow-y:auto"><div style="color:var(--m);text-align:center;padding:20px"><span class="spin"></span> Loading...</div></div>
+    </div>
+    <div class="pn">
+      <div class="ph"><div class="pt">🌐 GLOBAL MARKET NEWS</div><span class="badge ba">FINNHUB</span></div>
+      <div class="news-filter-bar">
+        <button class="news-filter-btn active" onclick="filterPulseNews('all',this,'pulse-global-news')">ALL</button>
+        <button class="news-filter-btn" onclick="filterPulseNews('fed',this,'pulse-global-news')">🏛 FED/ECB</button>
+        <button class="news-filter-btn" onclick="filterPulseNews('earnings',this,'pulse-global-news')">💰 EARNINGS</button>
+        <button class="news-filter-btn" onclick="filterPulseNews('crypto',this,'pulse-global-news')">₿ CRYPTO</button>
+      </div>
+      <div id="pulse-global-news" style="max-height:400px;overflow-y:auto"><div style="color:var(--m);text-align:center;padding:20px"><span class="spin"></span> Loading...</div></div>
+    </div>
+  </div>
+
 </div>
 
 </div><!-- /main -->
@@ -666,7 +726,7 @@ const APP = {
   page: 'equity', symbol: '', quote: null, history: [], analysis: null,
   chart: null, candleSeries: null, volSeries: null, sma20Series: null, sma50Series: null,
   fno: { index: 'NIFTY', expiry: '', data: null, processed: null, prevOI: {}, oiHistory: [], alertStrikes: {} },
-  indices: {}, news: [], lastNewsTitle: '', bankData: [],
+  indices: {}, news: [], globalNews: [], lastNewsTitle: '', lastNewsTitles: new Set(), newsFilter: 'all', bankData: [],
   timers: {}, connected: false, chartRange: '3mo', chartInterval: '1d',
   // Zerodha Auth
   kite: { api_key: '', api_secret: '', access_token: '', active: false }
@@ -929,43 +989,223 @@ function updateSectorHeatmap(allIdx) {
 }
 
 // ═══════════════════════════════════════════════════════
-// NEWS
+// NEWS — FAST, MULTI-SOURCE, AUTO-NOTIFICATIONS
 // ═══════════════════════════════════════════════════════
-async function refreshNews() {
-  const news = await fetchNews();
-  if (!news.length) return;
-  // Check for new breaking news
-  if (news[0] && news[0].highImpact && news[0].title !== APP.lastNewsTitle) {
-    APP.lastNewsTitle = news[0].title;
-    showNewsPopup(news[0]);
-  }
-  APP.news = news;
-  renderNewsFeed(news);
+
+// Request browser notification permission on load
+if ('Notification' in window && Notification.permission === 'default') {
+  Notification.requestPermission();
 }
 
-function renderNewsFeed(news) {
+// Audio beep for breaking news
+function playBreakingBeep() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator(); const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.frequency.value = 880; osc.type = 'sine';
+    gain.gain.setValueAtTime(0.15, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+    osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.5);
+  } catch(e) {}
+}
+
+async function fetchGlobalNews() {
+  try {
+    const data = await finnhubApi('market-news', { category: 'general' });
+    if (!data || !Array.isArray(data)) return [];
+    return data.slice(0, 40).map(n => ({
+      title: n.headline || n.title || '',
+      link: n.url || '',
+      time: n.datetime ? new Date(n.datetime * 1000).toISOString() : new Date().toISOString(),
+      desc: (n.summary || '').slice(0, 200),
+      source: n.source || 'Finnhub',
+      highImpact: /fed|rate|crash|war|tariff|sanctions|recession|inflation|CPI|GDP|NFP|jobs|earnings|tesla|apple|nvidia|bitcoin|crypto|oil|gold/i.test(n.headline || ''),
+      isGlobal: true,
+      category: n.category || 'general',
+      image: n.image || ''
+    })).filter(n => n.title);
+  } catch(e) { return []; }
+}
+
+async function refreshNews() {
+  // Fetch Indian + Global news in parallel
+  const [indiaNews, globalNews] = await Promise.allSettled([
+    fetchNews(),
+    fetchGlobalNews()
+  ]);
+
+  const india = indiaNews.status === 'fulfilled' ? indiaNews.value : [];
+  const global = globalNews.status === 'fulfilled' ? globalNews.value : [];
+
+  // Tag Indian news
+  india.forEach(n => { n.isGlobal = false; n.isNew = !APP.lastNewsTitles.has(n.title); });
+  global.forEach(n => { n.isNew = !APP.lastNewsTitles.has(n.title); });
+
+  // Detect NEW breaking news
+  const allBreaking = [...india, ...global].filter(n => n.highImpact && n.isNew);
+  if (allBreaking.length > 0) {
+    const top = allBreaking[0];
+    if (top.title !== APP.lastNewsTitle) {
+      APP.lastNewsTitle = top.title;
+      showNewsPopup(top);
+      playBreakingBeep();
+      showBreakingTicker(allBreaking.slice(0, 5));
+
+      // Desktop notification
+      if ('Notification' in window && Notification.permission === 'granted') {
+        try {
+          new Notification('🔴 KHABAR Breaking', {
+            body: top.title,
+            icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">📰</text></svg>',
+            tag: 'khabar-news',
+            requireInteraction: false
+          });
+        } catch(e) {}
+      }
+    }
+  }
+
+  // Save title set for dedup (keep last 200)
+  [...india, ...global].forEach(n => APP.lastNewsTitles.add(n.title));
+  if (APP.lastNewsTitles.size > 200) {
+    const arr = [...APP.lastNewsTitles];
+    APP.lastNewsTitles = new Set(arr.slice(-200));
+  }
+
+  // Combine and sort by time
+  const combined = [...india, ...global].sort((a, b) => new Date(b.time) - new Date(a.time));
+
+  APP.news = combined;
+  APP.globalNews = global;
+  renderNewsFeed(combined);
+  renderPulseNews(india, global);
+
+  // Update timestamp
+  const el = $('news-last-update');
+  if (el) el.textContent = new Date().toLocaleTimeString('en-IN', { hour12: false });
+}
+
+function renderNewsFeed(news, filter) {
+  filter = filter || APP.newsFilter || 'all';
+  let filtered = news;
+  if (filter === 'breaking') filtered = news.filter(n => n.highImpact);
+  else if (filter === 'india') filtered = news.filter(n => !n.isGlobal);
+  else if (filter === 'global') filtered = news.filter(n => n.isGlobal);
+  else if (filter === 'market-move') filtered = news.filter(n => n.highImpact || /nifty|sensex|bank nifty|market|crash|rally|circuit|FII|DII|RBI/i.test(n.title));
+
   const el = $('news-feed');
-  el.innerHTML = news.slice(0, 25).map(n => {
+  if (!filtered.length) {
+    el.innerHTML = '<div style="color:var(--m);text-align:center;padding:20px">No news in this category</div>';
+    $('news-count').textContent = '0';
+    return;
+  }
+
+  el.innerHTML = filtered.slice(0, 35).map(n => {
     const time = new Date(n.time);
     const ago = Math.round((Date.now() - time) / 60000);
-    const agoStr = ago < 60 ? `${ago}m ago` : `${Math.round(ago/60)}h ago`;
-    return `<div class="news-item ${n.highImpact ? 'news-hi' : ''}">
-      <span class="news-src">${n.source}</span>
-      <span style="font-size:9px;color:var(--m)">${agoStr}</span>
-      ${n.highImpact ? '<span style="color:var(--r);font-size:9px"> 🔴 HIGH IMPACT</span>' : ''}
-      <div style="margin-top:3px;font-size:11px;${n.highImpact ? 'font-weight:700;color:var(--t)' : 'color:var(--m)'}">${n.title}</div>
+    const agoStr = ago < 1 ? 'JUST NOW' : ago < 60 ? `${ago}m ago` : `${Math.round(ago/60)}h ago`;
+    const isVeryNew = ago < 5;
+    const srcClass = n.isGlobal ? 'news-src news-src-finnhub' : 'news-src';
+    const itemClass = n.highImpact ? 'news-hi' : (n.isNew && isVeryNew ? 'news-new' : '');
+    return `<div class="news-item ${itemClass}" ${n.link ? `onclick="window.open('${n.link}','_blank')"` : ''}>
+      <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap">
+        <span class="${srcClass}">${n.source}</span>
+        <span style="font-size:9px;color:${isVeryNew ? 'var(--a)' : 'var(--m)'}${isVeryNew ? ';font-weight:700' : ''}">${agoStr}</span>
+        ${n.highImpact ? '<span class="news-badge-new">HIGH IMPACT</span>' : ''}
+        ${isVeryNew && !n.highImpact ? '<span class="news-badge-live">NEW</span>' : ''}
+        ${n.isGlobal ? '<span style="font-size:8px;color:var(--m)">🌐</span>' : ''}
+      </div>
+      <div style="margin-top:4px;font-size:11px;line-height:1.5;${n.highImpact ? 'font-weight:700;color:var(--t)' : 'color:var(--m)'}">${n.title}</div>
+      ${n.desc ? `<div style="font-size:9px;color:var(--m);margin-top:2px;opacity:.7">${n.desc.slice(0, 120)}${n.desc.length > 120 ? '...' : ''}</div>` : ''}
     </div>`;
   }).join('');
-  $('news-count').textContent = `${news.length} ITEMS`;
+  $('news-count').textContent = `${filtered.length} ITEMS`;
+}
+
+function filterNews(filter, btn) {
+  APP.newsFilter = filter;
+  document.querySelectorAll('#news-filters .news-filter-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  renderNewsFeed(APP.news, filter);
+}
+
+function filterPulseNews(filter, btn, panelId) {
+  // Update active button in parent
+  if (btn) {
+    btn.parentElement.querySelectorAll('.news-filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  }
+  const panel = $(panelId);
+  if (!panel) return;
+
+  const isGlobal = panelId === 'pulse-global-news';
+  const src = isGlobal ? APP.globalNews : APP.news.filter(n => !n.isGlobal);
+  let filtered = src;
+
+  if (filter === 'breaking') filtered = src.filter(n => n.highImpact);
+  else if (filter === 'rbi') filtered = src.filter(n => /RBI|SEBI|regulation|policy|compliance|directive/i.test(n.title));
+  else if (filter === 'results') filtered = src.filter(n => /result|earning|profit|loss|revenue|Q[1-4]|quarter/i.test(n.title));
+  else if (filter === 'fed') filtered = src.filter(n => /fed|ecb|boj|rate|central bank|monetary|powell|lagarde/i.test(n.title));
+  else if (filter === 'earnings') filtered = src.filter(n => /earning|revenue|profit|eps|quarter|guidance|forecast/i.test(n.title));
+  else if (filter === 'crypto') filtered = src.filter(n => /bitcoin|crypto|ethereum|btc|eth|blockchain|defi/i.test(n.title));
+
+  renderPulseNewsPanel(panel, filtered);
+}
+
+function renderPulseNews(india, global) {
+  renderPulseNewsPanel($('pulse-india-news'), india);
+  renderPulseNewsPanel($('pulse-global-news'), global);
+}
+
+function renderPulseNewsPanel(el, news) {
+  if (!el) return;
+  if (!news || !news.length) {
+    el.innerHTML = '<div style="color:var(--m);text-align:center;padding:20px">No news available</div>';
+    return;
+  }
+  el.innerHTML = news.slice(0, 30).map(n => {
+    const time = new Date(n.time);
+    const ago = Math.round((Date.now() - time) / 60000);
+    const agoStr = ago < 1 ? 'JUST NOW' : ago < 60 ? `${ago}m ago` : `${Math.round(ago/60)}h ago`;
+    const isVeryNew = ago < 5;
+    return `<div class="news-item ${n.highImpact ? 'news-hi' : (isVeryNew ? 'news-new' : '')}" ${n.link ? `onclick="window.open('${n.link}','_blank')"` : ''} style="cursor:pointer">
+      <div style="display:flex;align-items:center;gap:4px">
+        <span class="news-src ${n.isGlobal ? 'news-src-finnhub' : ''}">${n.source}</span>
+        <span style="font-size:9px;color:${isVeryNew ? 'var(--a);font-weight:700' : 'var(--m)'}">${agoStr}</span>
+        ${n.highImpact ? '<span class="news-badge-new">HIGH IMPACT</span>' : ''}
+        ${isVeryNew ? '<span class="news-badge-live">NEW</span>' : ''}
+      </div>
+      <div style="margin-top:4px;font-size:11px;line-height:1.5;${n.highImpact ? 'font-weight:700;color:var(--t)' : 'color:var(--m)'}">${n.title}</div>
+      ${n.desc ? `<div style="font-size:9px;color:var(--m);margin-top:2px;opacity:.6">${n.desc.slice(0, 150)}...</div>` : ''}
+    </div>`;
+  }).join('');
 }
 
 function showNewsPopup(item) {
   $('np-title').textContent = item.title;
-  $('np-desc').textContent = item.desc || item.source;
+  $('np-desc').textContent = item.desc || '';
+  const srcTime = $('np-source-time');
+  if (srcTime) srcTime.textContent = `${item.source} · ${new Date(item.time).toLocaleTimeString('en-IN', { hour12: false })}`;
   $('news-popup').classList.add('show');
-  setTimeout(() => $('news-popup').classList.remove('show'), 8000);
+  setTimeout(() => $('news-popup').classList.remove('show'), 10000);
 }
 function closeNewsPopup() { $('news-popup').classList.remove('show'); }
+
+function showBreakingTicker(items) {
+  const ticker = $('breaking-ticker');
+  const text = $('bt-text');
+  if (!ticker || !text || !items.length) return;
+  text.textContent = items.map(n => `⚡ ${n.title}`).join('     ●     ');
+  ticker.classList.add('active');
+  // Auto-hide after 60s
+  clearTimeout(APP._tickerTimeout);
+  APP._tickerTimeout = setTimeout(() => dismissTicker(), 60000);
+}
+function dismissTicker() {
+  const ticker = $('breaking-ticker');
+  if (ticker) ticker.classList.remove('active');
+}
 
 // ═══════════════════════════════════════════════════════
 // BANKING OI
@@ -2856,10 +3096,10 @@ function startRefresh() {
     if (document.visibilityState === 'visible') refreshIndices();
   }, 10000);
 
-  // News every 2 min
+  // News every 45s — fast updates for market-moving news
   APP.timers.news = setInterval(() => {
     if (document.visibilityState === 'visible') refreshNews();
-  }, 120000);
+  }, 45000);
 
   // Bank OI every 30s
   APP.timers.bank = setInterval(() => {
