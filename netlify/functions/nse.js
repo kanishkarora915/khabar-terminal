@@ -126,12 +126,34 @@ async function nseFetch(path) {
 }
 
 async function yahooFetch(symbol, range, interval) {
-  const yfSym = symbol.includes('.') ? symbol : symbol + '.NS';
+  // Map Indian indices to correct Yahoo Finance symbols
+  const YAHOO_INDEX_MAP = {
+    'NIFTY 50': '^NSEI', 'NIFTY': '^NSEI', 'NIFTY50': '^NSEI',
+    'NIFTY BANK': '^NSEBANK', 'BANKNIFTY': '^NSEBANK', 'BANK NIFTY': '^NSEBANK',
+    'SENSEX': '^BSESN', 'BSE SENSEX': '^BSESN',
+    'NIFTY IT': '^CNXIT', 'NIFTY FIN SERVICE': '^CNXFIN',
+    'NIFTY MIDCAP 100': '^CNXMDCP', 'FINNIFTY': '^CNXFIN',
+    'NIFTY AUTO': '^CNXAUTO', 'NIFTY PHARMA': '^CNXPHARMA',
+    'NIFTY METAL': '^CNXMETAL', 'NIFTY REALTY': '^CNXREALTY',
+    'NIFTY ENERGY': '^CNXENERGY', 'NIFTY FMCG': '^CNXFMCG',
+    'NIFTY PSU BANK': '^CNXPSUBANK', 'NIFTY MEDIA': '^CNXMEDIA',
+  };
+  const upper = symbol.toUpperCase();
+  const yfSym = YAHOO_INDEX_MAP[upper] || (symbol.includes('.') ? symbol : symbol + '.NS');
   const path = `/v8/finance/chart/${encodeURIComponent(yfSym)}?interval=${interval || '1d'}&range=${range || '1y'}`;
-  return await httpGet('query1.finance.yahoo.com', path, {
+
+  // Try primary Yahoo endpoint, fallback to secondary
+  let result = await httpGet('query1.finance.yahoo.com', path, {
     'Accept': 'application/json',
-    'User-Agent': 'Mozilla/5.0',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
   });
+  if (!result.data?.chart?.result) {
+    result = await httpGet('query2.finance.yahoo.com', path, {
+      'Accept': 'application/json',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    });
+  }
+  return result;
 }
 
 exports.handler = async (event) => {

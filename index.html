@@ -815,11 +815,12 @@ async function analyzeStock() {
   toast(`Loading ${sym}...`, 'info');
 
   // Fetch quote + history in parallel
-  // Try Kite for quote (real-time), NSE + Yahoo for history
+  // For indices like "NIFTY 50", use correct Kite symbol format
+  const kiteSymbol = sym.includes(' ') ? `NSE:${sym}` : `NSE:${sym}`;
   const kiteQuotePromise = APP.kite.active
-    ? kiteApi('quote', { instruments: `NSE:${sym}` })
+    ? kiteApi('quote', { instruments: kiteSymbol })
     : Promise.resolve(null);
-  const nseQuotePromise = nseApi('quote', { symbol: sym });
+  const nseQuotePromise = nseApi('quote', { symbol: sym.replace(' ', '%20') });
   const histPromise = nseApi('history', { symbol: sym, range: APP.chartRange, interval: APP.chartInterval });
 
   const [kiteQuote, nseQuote, histData] = await Promise.all([kiteQuotePromise, nseQuotePromise, histPromise]);
@@ -828,8 +829,10 @@ async function analyzeStock() {
   let price = 0, chg = 0, pChg = 0;
   const quoteData = nseQuote; // NSE has richer data structure
 
-  if (kiteQuote?.data?.[`NSE:${sym}`]) {
-    const kq = kiteQuote.data[`NSE:${sym}`];
+  // Find Kite quote data — handle various key formats
+  const kiteKey = Object.keys(kiteQuote?.data || {}).find(k => k.includes(sym)) || `NSE:${sym}`;
+  if (kiteQuote?.data?.[kiteKey]) {
+    const kq = kiteQuote.data[kiteKey];
     price = kq.last_price;
     chg = kq.net_change || (price - (kq.ohlc?.close || price));
     pChg = kq.ohlc?.close ? ((price - kq.ohlc.close) / kq.ohlc.close * 100) : 0;
