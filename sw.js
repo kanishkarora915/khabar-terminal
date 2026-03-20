@@ -1,15 +1,15 @@
-// KHABAR Service Worker — PWA Support
-const CACHE_NAME = 'khabar-v1';
+// KHABAR Service Worker — PWA Support v2
+const CACHE_NAME = 'khabar-v2';
 const STATIC_ASSETS = [
-  '/',
-  '/index.html',
   '/icon.svg',
+  '/icon-192.png',
+  '/icon-512.png',
   '/manifest.json',
   'https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js',
   'https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600;700;800&display=swap'
 ];
 
-// Install — cache static assets
+// Install — cache static assets (NOT index.html)
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => {
@@ -21,7 +21,7 @@ self.addEventListener('install', event => {
   self.skipWaiting();
 });
 
-// Activate — clean old caches
+// Activate — clean ALL old caches
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(keys => {
@@ -33,21 +33,36 @@ self.addEventListener('activate', event => {
   self.clients.claim();
 });
 
-// Fetch — network-first for API calls, cache-first for static assets
+// Fetch strategy
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
-  // API calls — always go to network (real-time data, never cache)
+  // API calls — always network, never cache
   if (url.pathname.startsWith('/.netlify/functions/')) {
     event.respondWith(fetch(event.request));
     return;
   }
 
-  // Static assets — try cache first, fallback to network
+  // HTML pages (index.html, /) — NETWORK-FIRST so updates show immediately
+  if (event.request.destination === 'document' || url.pathname === '/' || url.pathname.endsWith('.html')) {
+    event.respondWith(
+      fetch(event.request).then(res => {
+        if (res.ok) {
+          const clone = res.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+        }
+        return res;
+      }).catch(() => {
+        return caches.match(event.request) || caches.match('/index.html');
+      })
+    );
+    return;
+  }
+
+  // Static assets — cache-first with background update
   event.respondWith(
     caches.match(event.request).then(cached => {
       if (cached) {
-        // Return cached but also update cache in background
         fetch(event.request).then(res => {
           if (res.ok) {
             caches.open(CACHE_NAME).then(cache => cache.put(event.request, res));
@@ -63,7 +78,6 @@ self.addEventListener('fetch', event => {
         return res;
       });
     }).catch(() => {
-      // Offline fallback
       if (event.request.destination === 'document') {
         return caches.match('/index.html');
       }
