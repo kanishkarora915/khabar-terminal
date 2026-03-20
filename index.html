@@ -1096,15 +1096,17 @@ function updateFibTable(a) {
 // CHART (TradingView Widget — Professional Real-Time)
 // ═══════════════════════════════════════════════════════
 function getTVSymbol(sym) {
+  // TradingView free widget: use futures (NIFTY1!) for indices, NSE: for stocks
   const INDEX_MAP = {
-    'NIFTY 50': 'NSE:NIFTY', 'NIFTY': 'NSE:NIFTY', 'NIFTY50': 'NSE:NIFTY',
-    'NIFTY BANK': 'NSE:BANKNIFTY', 'BANKNIFTY': 'NSE:BANKNIFTY', 'BANK NIFTY': 'NSE:BANKNIFTY',
+    'NIFTY 50': 'NSE:NIFTY1!', 'NIFTY': 'NSE:NIFTY1!', 'NIFTY50': 'NSE:NIFTY1!',
+    'NIFTY BANK': 'NSE:BANKNIFTY1!', 'BANKNIFTY': 'NSE:BANKNIFTY1!', 'BANK NIFTY': 'NSE:BANKNIFTY1!',
     'SENSEX': 'BSE:SENSEX', 'BSE SENSEX': 'BSE:SENSEX',
-    'NIFTY IT': 'NSE:CNXIT', 'NIFTY FIN SERVICE': 'NSE:CNXFINANCE',
-    'FINNIFTY': 'NSE:CNXFINANCE', 'NIFTY AUTO': 'NSE:CNXAUTO',
-    'NIFTY PHARMA': 'NSE:CNXPHARMA', 'NIFTY MIDCAP 100': 'NSE:CNXMIDCAP',
+    'NIFTY IT': 'NSE:CNXIT', 'NIFTY FIN SERVICE': 'NSE:FINNIFTY1!',
+    'FINNIFTY': 'NSE:FINNIFTY1!', 'NIFTY AUTO': 'NSE:CNXAUTO',
+    'NIFTY PHARMA': 'NSE:CNXPHARMA', 'NIFTY MIDCAP 100': 'NSE:MIDCPNIFTY1!',
     'NIFTY METAL': 'NSE:CNXMETAL', 'NIFTY ENERGY': 'NSE:CNXENERGY',
     'NIFTY REALTY': 'NSE:CNXREALTY', 'NIFTY FMCG': 'NSE:CNXFMCG',
+    'MIDCPNIFTY': 'NSE:MIDCPNIFTY1!',
   };
   return INDEX_MAP[sym.toUpperCase()] || `NSE:${sym.toUpperCase().replace(/ /g, '')}`;
 }
