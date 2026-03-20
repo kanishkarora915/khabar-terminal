@@ -1,0 +1,33 @@
+{
+  "name": "KHABAR — Professional Trading Terminal",
+  "short_name": "KHABAR",
+  "description": "Real-time Indian stock market terminal with Option Chain, F&O analysis, Global markets & AI-powered trade suggestions",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#060b16",
+  "theme_color": "#060b16",
+  "categories": ["finance", "business"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [],
+  "prefer_related_applications": false
+}

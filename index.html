@@ -2,8 +2,28 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>KHABAR — Professional Trading Terminal</title>
+
+<!-- PWA Meta Tags -->
+<meta name="description" content="Real-time Indian stock market terminal with Option Chain, F&O, Global Markets & AI trade suggestions">
+<meta name="theme-color" content="#060b16">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="KHABAR">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="application-name" content="KHABAR">
+<meta name="msapplication-TileColor" content="#060b16">
+<meta name="msapplication-navbutton-color" content="#060b16">
+
+<!-- PWA Icons -->
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" type="image/svg+xml" href="/icon.svg">
+<link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<link rel="apple-touch-icon" sizes="512x512" href="/icon-512.png">
+
 <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -294,6 +314,7 @@ body{background:var(--bg);color:var(--t);font-family:var(--f2);font-size:12px;ov
     <span id="hclock" style="color:var(--a)">--:--:--</span>
     <span id="mkt-st">—</span>
     <span id="lic-user-badge" style="font-size:8px;padding:3px 8px;border-radius:10px;background:rgba(0,204,255,.08);color:var(--a);border:1px solid rgba(0,204,255,.2);letter-spacing:1px;display:none">PRO</span>
+    <button class="btn btn-b" id="pwa-install-btn" onclick="installPWA()" style="padding:4px 10px;font-size:9px;display:none;background:rgba(0,230,118,.1);color:var(--g);border-color:var(--g)">📲 INSTALL APP</button>
     <button class="btn btn-b" onclick="logout()" style="padding:4px 10px;font-size:9px">LOGOUT</button>
   </div>
 </div>
@@ -4295,6 +4316,46 @@ async function initDashboard() {
   results.forEach((r, i) => {
     if (r.status === 'rejected') console.warn(`Init task ${i} failed:`, r.reason);
   });
+}
+
+// ═══════════════════════════════════════════════════════
+// PWA — Install & Service Worker
+// ═══════════════════════════════════════════════════════
+let deferredInstallPrompt = null;
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').then(reg => {
+    console.log('SW registered:', reg.scope);
+  }).catch(err => console.warn('SW registration failed:', err));
+}
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  const btn = $('pwa-install-btn');
+  if (btn) btn.style.display = 'inline-block';
+});
+
+window.addEventListener('appinstalled', () => {
+  deferredInstallPrompt = null;
+  const btn = $('pwa-install-btn');
+  if (btn) btn.style.display = 'none';
+  toast('KHABAR installed! Find it on your home screen ✓');
+});
+
+async function installPWA() {
+  if (!deferredInstallPrompt) {
+    toast('Open in Chrome/Edge browser → tap ⋮ → "Add to Home Screen"', 'info');
+    return;
+  }
+  deferredInstallPrompt.prompt();
+  const { outcome } = await deferredInstallPrompt.userChoice;
+  if (outcome === 'accepted') {
+    toast('Installing KHABAR app... ✓');
+  }
+  deferredInstallPrompt = null;
+  const btn = $('pwa-install-btn');
+  if (btn) btn.style.display = 'none';
 }
 
 window.onload = async () => {
