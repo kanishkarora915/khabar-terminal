@@ -3784,48 +3784,60 @@ function renderFearGreed() {
   `;
 }
 
-function renderFIIDII() {
-  // Use NSE indices data — look for FII/DII info
-  // Since direct FII/DII API from NSE requires special endpoints, we simulate from market data
-  const nifty = APP.indices['NIFTY 50'];
-  const bank = APP.indices['NIFTY BANK'];
+async function renderFIIDII() {
+  // Fetch REAL FII/DII data from NSE
+  try {
+    const data = await nseApi('fii-dii');
+    if (data && Array.isArray(data)) {
+      // NSE returns array of objects with category, buyValue, sellValue
+      let fiiBuy = 0, fiiSell = 0, diiBuy = 0, diiSell = 0;
+      data.forEach(row => {
+        const cat = (row.category || '').toUpperCase();
+        if (cat.includes('FII') || cat.includes('FPI')) {
+          fiiBuy += parseFloat(row.buyValue || 0);
+          fiiSell += parseFloat(row.sellValue || 0);
+        } else if (cat.includes('DII')) {
+          diiBuy += parseFloat(row.buyValue || 0);
+          diiSell += parseFloat(row.sellValue || 0);
+        }
+      });
+      const fiiNet = fiiBuy - fiiSell;
+      const diiNet = diiBuy - diiSell;
 
-  if (!nifty) return;
+      $('fii-net').textContent = `${fiiNet >= 0 ? '+' : ''}${fiiL(fiiNet)}`;
+      $('fii-net').style.color = fiiNet >= 0 ? 'var(--g)' : 'var(--r)';
+      $('fii-buy').textContent = fiiL(fiiBuy);
+      $('fii-sell').textContent = fiiL(fiiSell);
 
-  // Estimate from market movement patterns
-  const niftyChg = parseFloat(nifty.percentChange || 0);
-  const bankChg = parseFloat(bank?.percentChange || 0);
+      $('dii-net').textContent = `${diiNet >= 0 ? '+' : ''}${fiiL(diiNet)}`;
+      $('dii-net').style.color = diiNet >= 0 ? 'var(--g)' : 'var(--r)';
+      $('dii-buy').textContent = fiiL(diiBuy);
+      $('dii-sell').textContent = fiiL(diiSell);
 
-  // FII tends to buy when broad market is up, especially bank & large caps
-  const fiiBias = niftyChg * 800 + bankChg * 400; // rough Cr estimate
-  const diiBias = -fiiBias * 0.6 + Math.random() * 200 - 100; // DII typically counter-trades
+      const trend = fiiNet > 0 && diiNet > 0 ? 'Both BUYING — Strong Bullish' :
+        fiiNet > 0 && diiNet < 0 ? 'FII Buying, DII Selling — FII-led rally' :
+        fiiNet < 0 && diiNet > 0 ? 'FII Selling, DII Buying — Defensive' :
+        'Both SELLING — Bearish pressure';
+      const tColor = fiiNet > 0 && diiNet > 0 ? 'var(--g)' : fiiNet < 0 && diiNet < 0 ? 'var(--r)' : 'var(--y)';
+      $('fii-trend').innerHTML = `<span style="color:${tColor}">${trend}</span>`;
+      $('fii-badge').textContent = fiiNet >= 0 ? 'FII +VE' : 'FII -VE';
+      $('fii-badge').className = `badge ${fiiNet >= 0 ? 'bg' : 'br'}`;
+      return;
+    }
+  } catch(e) { console.warn('FII/DII fetch failed:', e); }
 
-  const fiiBuy = Math.abs(fiiBias > 0 ? fiiBias * 1.5 : fiiBias * 0.5) + 2000;
-  const fiiSell = Math.abs(fiiBias > 0 ? fiiBias * 0.5 : fiiBias * 1.5) + 2000;
-  const fiiNet = fiiBuy - fiiSell;
-
-  const diiBuy = Math.abs(diiBias > 0 ? diiBias * 1.2 : diiBias * 0.8) + 1500;
-  const diiSell = Math.abs(diiBias > 0 ? diiBias * 0.6 : diiBias * 1.4) + 1500;
-  const diiNet = diiBuy - diiSell;
-
-  $('fii-net').textContent = `${fiiNet >= 0 ? '+' : ''}${fiiNet.toFixed(0)} Cr`;
-  $('fii-net').style.color = fiiNet >= 0 ? 'var(--g)' : 'var(--r)';
-  $('fii-buy').textContent = fiiL(fiiBuy);
-  $('fii-sell').textContent = fiiL(fiiSell);
-
-  $('dii-net').textContent = `${diiNet >= 0 ? '+' : ''}${diiNet.toFixed(0)} Cr`;
-  $('dii-net').style.color = diiNet >= 0 ? 'var(--g)' : 'var(--r)';
-  $('dii-buy').textContent = fiiL(diiBuy);
-  $('dii-sell').textContent = fiiL(diiSell);
-
-  const trend = fiiNet > 0 && diiNet > 0 ? 'Both BUYING — Strong Bullish' :
-    fiiNet > 0 && diiNet < 0 ? 'FII Buying, DII Selling — FII-led rally' :
-    fiiNet < 0 && diiNet > 0 ? 'FII Selling, DII Buying — Defensive' :
-    'Both SELLING — Bearish pressure';
-  const tColor = fiiNet > 0 && diiNet > 0 ? 'var(--g)' : fiiNet < 0 && diiNet < 0 ? 'var(--r)' : 'var(--y)';
-  $('fii-trend').innerHTML = `<span style="color:${tColor}">${trend}</span>`;
-  $('fii-badge').textContent = fiiNet >= 0 ? 'FII +VE' : 'FII -VE';
-  $('fii-badge').className = `badge ${fiiNet >= 0 ? 'bg' : 'br'}`;
+  // Fallback: Show "Data unavailable" instead of fake numbers
+  $('fii-net').textContent = 'NSE blocked';
+  $('fii-net').style.color = 'var(--m)';
+  $('fii-buy').textContent = '--';
+  $('fii-sell').textContent = '--';
+  $('dii-net').textContent = 'NSE blocked';
+  $('dii-net').style.color = 'var(--m)';
+  $('dii-buy').textContent = '--';
+  $('dii-sell').textContent = '--';
+  $('fii-trend').innerHTML = '<span style="color:var(--m)">NSE FII/DII API blocked from cloud servers. Data shows when NSE allows access.</span>';
+  $('fii-badge').textContent = 'NSE';
+  $('fii-badge').className = 'badge ba';
 }
 
 function fiiL(v) { return v >= 1000 ? (v / 1000).toFixed(1) + 'K Cr' : v.toFixed(0) + ' Cr'; }
@@ -3937,81 +3949,109 @@ function renderSectorRotation() {
   $('rotation-insight').innerHTML = `<b style="color:var(--a)">INSIGHT:</b> ${insight}`;
 }
 
-function renderIPOCalendar() {
-  // Static upcoming IPOs (would need a real data source in production)
+async function renderIPOCalendar() {
   const el = $('ipo-panel');
-  const ipos = [
-    { name: 'Check live NSE IPO data', status: 'UPCOMING', date: '--', price: '--', size: '--' }
-  ];
 
-  // Try to show from news
-  let html = '<div style="font-size:10px;color:var(--m);margin-bottom:8px">Recent IPO-related updates from market news:</div>';
-  const ipoNews = APP.news.filter(n => {
-    const t = (n.title || '').toLowerCase();
-    return t.includes('ipo') || t.includes('listing') || t.includes('allotment');
-  }).slice(0, 5);
+  // Fetch REAL IPO data from Finnhub
+  try {
+    const data = await finnhubApi('ipo');
+    if (data?.ipoCalendar?.length) {
+      const ipos = data.ipoCalendar.slice(0, 15);
+      let html = `<div style="font-size:10px;color:var(--a);letter-spacing:1px;font-weight:700;margin-bottom:8px">UPCOMING & RECENT IPOs (Finnhub Real-Time)</div>`;
+      html += ipos.map(ipo => {
+        const isPast = new Date(ipo.date) < new Date();
+        return `<div style="padding:8px;background:var(--bg);border-radius:6px;margin-bottom:4px;border-left:3px solid ${isPast?'var(--m)':'var(--g)'}">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <b style="font-size:12px;color:var(--t)">${ipo.name || ipo.symbol || '--'}</b>
+            <span style="font-size:9px;color:${isPast?'var(--m)':'var(--a)'}">${ipo.date || '--'}</span>
+          </div>
+          <div style="font-size:10px;color:var(--m);margin-top:3px;display:flex;gap:12px;flex-wrap:wrap">
+            ${ipo.symbol ? `<span>Symbol: <b>${ipo.symbol}</b></span>` : ''}
+            ${ipo.price ? `<span>Price: <b style="color:var(--y)">$${ipo.price}</b></span>` : ''}
+            ${ipo.numberOfShares ? `<span>Shares: <b>${(ipo.numberOfShares/1000000).toFixed(1)}M</b></span>` : ''}
+            ${ipo.totalSharesValue ? `<span>Value: <b style="color:var(--g)">$${(ipo.totalSharesValue/1000000).toFixed(0)}M</b></span>` : ''}
+            ${ipo.status ? `<span>Status: <b>${ipo.status}</b></span>` : ''}
+          </div>
+        </div>`;
+      }).join('');
 
-  if (ipoNews.length > 0) {
-    ipoNews.forEach(n => {
-      html += `<div class="ipo-item">
-        <div style="font-weight:700;font-size:11px;margin-bottom:2px">${n.title || '--'}</div>
-        <div style="font-size:9px;color:var(--m)">${n.source || ''} | ${n.pubDate ? new Date(n.pubDate).toLocaleDateString() : '--'}</div>
-      </div>`;
-    });
-  } else {
-    html += '<div style="color:var(--m);text-align:center;padding:10px">No recent IPO news found. IPO data refreshes with market news.</div>';
-  }
+      // Also add IPO news from RSS
+      const ipoNews = APP.news.filter(n => /ipo|listing|allotment/i.test(n.title || '')).slice(0, 3);
+      if (ipoNews.length) {
+        html += '<div style="font-size:10px;color:var(--a);letter-spacing:1px;font-weight:700;margin:12px 0 6px">IPO NEWS</div>';
+        ipoNews.forEach(n => {
+          html += `<div style="padding:6px 8px;background:var(--bg);border-radius:4px;margin-bottom:3px;font-size:11px;cursor:pointer" onclick="window.open('${n.link}','_blank')">
+            <span class="news-src">${n.source}</span> ${n.title}
+          </div>`;
+        });
+      }
+      el.innerHTML = html;
+      return;
+    }
+  } catch(e) { console.warn('IPO fetch:', e); }
 
-  html += `<div style="margin-top:10px;padding:8px;background:var(--bg);border-radius:6px;font-size:9px;color:var(--m);text-align:center">
-    Visit <b style="color:var(--a)">nseindia.com/market-data/all-upcoming-issues-of-equity</b> for full IPO calendar
-  </div>`;
-  el.innerHTML = html;
+  // Fallback to news only
+  const ipoNews = APP.news.filter(n => /ipo|listing|allotment/i.test(n.title || '')).slice(0, 5);
+  el.innerHTML = ipoNews.length ?
+    ipoNews.map(n => `<div style="padding:6px 8px;background:var(--bg);border-radius:4px;margin-bottom:3px;font-size:11px">${n.title}</div>`).join('') :
+    '<div style="color:var(--m);text-align:center;padding:15px">No IPO data available</div>';
 }
 
-function renderEconomicCalendar() {
+async function renderEconomicCalendar() {
   const el = $('econ-panel');
-  // Key upcoming events (maintained manually or from news feed)
-  const events = [
-    { date: 'Regular', event: 'RBI MPC Meeting', detail: 'Bi-monthly monetary policy review', icon: '🇮🇳', importance: 'HIGH' },
-    { date: 'Regular', event: 'US Fed FOMC', detail: '6-weekly rate decision & statement', icon: '🇺🇸', importance: 'HIGH' },
-    { date: 'Monthly', event: 'India CPI Inflation', detail: 'Consumer price index release', icon: '🇮🇳', importance: 'HIGH' },
-    { date: 'Monthly', event: 'India IIP Data', detail: 'Industrial production index', icon: '🇮🇳', importance: 'MED' },
-    { date: 'Monthly', event: 'US Non-Farm Payroll', detail: 'Employment data (1st Friday)', icon: '🇺🇸', importance: 'HIGH' },
-    { date: 'Monthly', event: 'US CPI / PPI', detail: 'Inflation readings', icon: '🇺🇸', importance: 'HIGH' },
-    { date: 'Weekly', event: 'India FII/DII Data', detail: 'Daily provisional data from NSE', icon: '🇮🇳', importance: 'MED' },
-    { date: 'Quarterly', event: 'India GDP Data', detail: 'Gross domestic product', icon: '🇮🇳', importance: 'HIGH' }
-  ];
 
-  let html = '';
-  events.forEach(e => {
-    const impColor = e.importance === 'HIGH' ? 'var(--r)' : e.importance === 'MED' ? 'var(--y)' : 'var(--m)';
-    html += `<div class="econ-item">
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <span style="font-weight:700;font-size:11px">${e.icon} ${e.event}</span>
-        <span class="badge" style="background:rgba(255,255,255,.05);color:${impColor};border:1px solid ${impColor};font-size:8px">${e.importance}</span>
-      </div>
-      <div style="font-size:9px;color:var(--m);margin-top:2px">${e.detail}</div>
-      <div style="font-size:8px;color:var(--a);margin-top:1px">${e.date}</div>
-    </div>`;
-  });
+  // Fetch REAL economic calendar from Finnhub
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const future = new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10);
+    const data = await finnhubApi('economic', { from: today, to: future });
 
-  // Add relevant news
-  const econNews = APP.news.filter(n => {
-    const t = (n.title || '').toLowerCase();
-    return t.includes('rbi') || t.includes('fed') || t.includes('inflation') || t.includes('gdp') || t.includes('rate') || t.includes('policy');
-  }).slice(0, 3);
+    if (data?.economicCalendar?.length) {
+      const events = data.economicCalendar.slice(0, 20);
+      let html = `<div style="font-size:10px;color:var(--a);letter-spacing:1px;font-weight:700;margin-bottom:8px">UPCOMING EVENTS (Next 14 days — Finnhub Real-Time)</div>`;
 
-  if (econNews.length > 0) {
-    html += '<div style="font-size:9px;color:var(--a);letter-spacing:1px;margin:10px 0 6px;font-weight:700">RECENT ECONOMIC NEWS</div>';
-    econNews.forEach(n => {
-      html += `<div class="econ-item" style="border-left-color:var(--a)">
-        <div style="font-size:10px;font-weight:600">${n.title || '--'}</div>
-        <div style="font-size:8px;color:var(--m)">${n.source || ''}</div>
-      </div>`;
-    });
-  }
+      events.forEach(e => {
+        const imp = (e.impact || '').toLowerCase();
+        const impColor = imp === 'high' ? 'var(--r)' : imp === 'medium' ? 'var(--y)' : 'var(--m)';
+        const impLabel = imp === 'high' ? 'HIGH' : imp === 'medium' ? 'MED' : 'LOW';
+        const countryFlag = (e.country === 'US') ? '🇺🇸' : (e.country === 'IN') ? '🇮🇳' : (e.country === 'EU' || e.country === 'DE') ? '🇪🇺' : (e.country === 'GB') ? '🇬🇧' : (e.country === 'JP') ? '🇯🇵' : (e.country === 'CN') ? '🇨🇳' : '🌐';
 
-  el.innerHTML = html;
+        html += `<div class="econ-item" style="border-left:3px solid ${impColor}">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span style="font-weight:700;font-size:12px">${countryFlag} ${e.event || '--'}</span>
+            <span class="badge" style="background:rgba(255,255,255,.05);color:${impColor};border:1px solid ${impColor};font-size:8px">${impLabel}</span>
+          </div>
+          <div style="font-size:10px;color:var(--m);margin-top:3px;display:flex;gap:12px;flex-wrap:wrap">
+            <span>📅 <b style="color:var(--a)">${e.time || e.date || '--'}</b></span>
+            ${e.actual != null ? `<span>Actual: <b style="color:var(--t)">${e.actual}</b></span>` : ''}
+            ${e.estimate != null ? `<span>Est: <b>${e.estimate}</b></span>` : ''}
+            ${e.prev != null ? `<span>Prev: <b>${e.prev}</b></span>` : ''}
+            ${e.country ? `<span style="color:var(--m)">${e.country}</span>` : ''}
+          </div>
+        </div>`;
+      });
+
+      // Add economic news
+      const econNews = APP.news.filter(n => /rbi|fed|inflation|gdp|rate|policy|cpi|pmi|payroll/i.test(n.title || '')).slice(0, 3);
+      if (econNews.length) {
+        html += '<div style="font-size:10px;color:var(--a);letter-spacing:1px;font-weight:700;margin:12px 0 6px">RELATED NEWS</div>';
+        econNews.forEach(n => {
+          html += `<div class="econ-item" style="border-left-color:var(--a);cursor:pointer" onclick="window.open('${n.link}','_blank')">
+            <div style="font-size:11px;font-weight:600">${n.title}</div>
+            <div style="font-size:9px;color:var(--m)">${n.source}</div>
+          </div>`;
+        });
+      }
+      el.innerHTML = html;
+      return;
+    }
+  } catch(e) { console.warn('Economic calendar:', e); }
+
+  // Fallback: show economic news only
+  const econNews = APP.news.filter(n => /rbi|fed|inflation|gdp|rate|policy|cpi/i.test(n.title || '')).slice(0, 5);
+  el.innerHTML = econNews.length ?
+    econNews.map(n => `<div class="econ-item"><div style="font-size:11px;font-weight:600">${n.title}</div><div style="font-size:9px;color:var(--m)">${n.source}</div></div>`).join('') :
+    '<div style="color:var(--m);text-align:center;padding:15px">No economic events data available</div>';
 }
 
 async function refreshPulse() {

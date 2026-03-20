@@ -190,6 +190,10 @@ exports.handler = async (event) => {
       case 'market-status':
         result = await nseFetch('/api/marketStatus');
         break;
+      case 'fii-dii':
+        // Real FII/DII data from NSE
+        result = await nseFetch('/api/fiidiiTradeReact');
+        break;
       case 'history':
         result = await yahooFetch(body.symbol, body.range || '1y', body.interval || '1d');
         break;
