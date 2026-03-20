@@ -87,10 +87,11 @@ exports.handler = async (event) => {
         break;
       }
       case 'indices': {
-        // Market indices (US)
+        // Market indices via ETF proxies (Finnhub free tier)
         const idxSymbols = ['^GSPC', '^DJI', '^IXIC', '^RUT', '^FTSE', '^GDAXI', '^FCHI', '^N225', '^HSI', '000001.SS'];
+        const ETF_PROXY = { '^GSPC': 'SPY', '^DJI': 'DIA', '^IXIC': 'QQQ', '^RUT': 'IWM', '^FTSE': 'EWU', '^GDAXI': 'EWG', '^FCHI': 'EWQ', '^N225': 'EWJ', '^HSI': 'EWH', '000001.SS': 'MCHI' };
         const idxResults = await Promise.allSettled(
-          idxSymbols.map(s => finnhubFetch(`/quote?symbol=${encodeURIComponent(s)}`))
+          idxSymbols.map(s => finnhubFetch(`/quote?symbol=${encodeURIComponent(ETF_PROXY[s] || s)}`))
         );
         const idxOut = {};
         idxSymbols.forEach((s, i) => {
@@ -100,6 +101,137 @@ exports.handler = async (event) => {
           }
         });
         result = { data: idxOut };
+        break;
+      }
+      case 'global-data': {
+        // Complete global market data — replaces Yahoo Finance
+        // Maps Yahoo-style symbols to Finnhub-compatible symbols
+        const requestedSyms = body.symbols || [];
+        const out = {};
+
+        // === Symbol mapping: Yahoo → Finnhub ETF proxy ===
+        const YAHOO_TO_FINNHUB = {
+          // US Indices → ETFs
+          '^GSPC': 'SPY', '^DJI': 'DIA', '^IXIC': 'QQQ', '^RUT': 'IWM',
+          // EU Indices → ETFs
+          '^FTSE': 'EWU', '^GDAXI': 'EWG', '^FCHI': 'EWQ', '^STOXX50E': 'FEZ',
+          // Asia Indices → ETFs
+          '^N225': 'EWJ', '^HSI': 'EWH', '000001.SS': 'MCHI', '^STI': 'EWS',
+          // Commodities → ETFs
+          'GC=F': 'GLD', 'SI=F': 'SLV', 'CL=F': 'USO', 'NG=F': 'UNG', 'HG=F': 'CPER',
+          // Bonds → ETFs (price-based, change reflects yield movement)
+          '^TNX': 'TLT', '^TYX': 'TLT', '^FVX': 'IEF',
+          // Crypto
+          'BTC-USD': 'BINANCE:BTCUSDT', 'ETH-USD': 'BINANCE:ETHUSDT',
+          // DXY
+          'DX-Y.NYB': 'UUP',
+        };
+
+        // Forex symbols that need the /forex/rates endpoint
+        const FOREX_SYMS = {
+          'USDINR=X': { base: 'USD', quote: 'INR' },
+          'EURINR=X': { base: 'EUR', quote: 'INR' },
+          'GBPINR=X': { base: 'GBP', quote: 'INR' },
+          'JPYINR=X': { base: 'JPY', quote: 'INR' },
+          'EURUSD=X': { base: 'EUR', quote: 'USD' },
+          'GBPUSD=X': { base: 'GBP', quote: 'USD' },
+          'USDJPY=X': { base: 'USD', quote: 'JPY' },
+          'USDCNY=X': { base: 'USD', quote: 'CNY' },
+        };
+
+        // Separate into quote-based and forex-based symbols
+        const quoteSyms = [];
+        const forexSyms = [];
+        const otherSyms = []; // like NIFTY 50 — skip, handled by NSE
+
+        requestedSyms.forEach(sym => {
+          if (YAHOO_TO_FINNHUB[sym]) {
+            quoteSyms.push(sym);
+          } else if (FOREX_SYMS[sym]) {
+            forexSyms.push(sym);
+          } else {
+            otherSyms.push(sym);
+          }
+        });
+
+        // Fetch ETF/stock quotes in parallel
+        const uniqueFinnhubSyms = [...new Set(quoteSyms.map(s => YAHOO_TO_FINNHUB[s]))];
+        const [quoteResults, forexResult] = await Promise.all([
+          Promise.allSettled(uniqueFinnhubSyms.map(s => finnhubFetch(`/quote?symbol=${encodeURIComponent(s)}`))),
+          forexSyms.length > 0 ? finnhubFetch('/forex/rates?base=USD').catch(() => null) : null
+        ]);
+
+        // Build finnhub symbol → quote map
+        const fhQuotes = {};
+        uniqueFinnhubSyms.forEach((s, i) => {
+          if (quoteResults[i].status === 'fulfilled') fhQuotes[s] = quoteResults[i].value;
+        });
+
+        // Map back to Yahoo symbols
+        quoteSyms.forEach(yahoSym => {
+          const fhSym = YAHOO_TO_FINNHUB[yahoSym];
+          const q = fhQuotes[fhSym];
+          if (q && q.c > 0) {
+            // For index ETF proxies, multiply by scaling factor to approximate real index value
+            const INDEX_SCALE = {
+              '^GSPC': 10, '^DJI': 100, '^IXIC': 45, '^RUT': 10,
+              '^FTSE': 10, '^GDAXI': 45, '^FCHI': 20, '^STOXX50E': 12,
+              '^N225': 100, '^HSI': 350, '000001.SS': 60, '^STI': 80,
+            };
+            const scale = INDEX_SCALE[yahoSym] || 1;
+            out[yahoSym] = {
+              price: +(q.c * scale).toFixed(2),
+              prev: +(q.pc * scale).toFixed(2),
+              change: q.dp || 0,
+              high: +(q.h * scale).toFixed(2),
+              low: +(q.l * scale).toFixed(2),
+              name: yahoSym,
+              exchange: 'Finnhub',
+              ts: q.t || 0
+            };
+          } else {
+            out[yahoSym] = { price: 0, prev: 0, change: 0, error: true };
+          }
+        });
+
+        // Forex data
+        if (forexResult && forexResult.quote) {
+          const rates = forexResult.quote;
+          forexSyms.forEach(yahoSym => {
+            const fx = FOREX_SYMS[yahoSym];
+            if (fx) {
+              let price = 0;
+              if (fx.base === 'USD') {
+                price = rates[fx.quote] || 0;
+              } else if (fx.quote === 'USD') {
+                price = rates[fx.base] ? (1 / rates[fx.base]) : 0;
+              } else {
+                // Cross rate: base/quote = (USD/quote) / (USD/base)
+                const usdToQuote = rates[fx.quote] || 0;
+                const usdToBase = rates[fx.base] || 0;
+                price = usdToBase ? (usdToQuote / usdToBase) : 0;
+              }
+              if (price > 0) {
+                out[yahoSym] = {
+                  price: +price.toFixed(price > 100 ? 2 : 4),
+                  prev: +price.toFixed(price > 100 ? 2 : 4),
+                  change: 0, // Forex rates endpoint doesn't provide change
+                  name: yahoSym,
+                  exchange: 'Finnhub Forex'
+                };
+              } else {
+                out[yahoSym] = { price: 0, prev: 0, change: 0, error: true };
+              }
+            }
+          });
+        }
+
+        // Mark other symbols as unavailable
+        otherSyms.forEach(s => {
+          out[s] = { price: 0, prev: 0, change: 0, error: true, source: 'unsupported' };
+        });
+
+        result = { data: out };
         break;
       }
       default:

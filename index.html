@@ -3713,8 +3713,8 @@ async function fetchGlobalData() {
   ];
   const unique = [...new Set(allSyms)];
 
-  // Split into batches of 8 to avoid Yahoo rate-limiting
-  const batchSize = 8;
+  // Split into batches of 10 for Finnhub
+  const batchSize = 10;
   const batches = [];
   for (let i = 0; i < unique.length; i += batchSize) {
     batches.push(unique.slice(i, i + batchSize));
@@ -3722,42 +3722,22 @@ async function fetchGlobalData() {
 
   const allData = {};
   try {
-    // Fetch all batches in parallel
+    // PRIMARY: Fetch via Finnhub (Yahoo is blocked from Netlify IPs)
     const results = await Promise.allSettled(
       batches.map(batch =>
-        fetch(NSE_API, {
+        fetch(FINNHUB_API, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'global-data', symbols: batch, range: '2d', interval: '1d' })
+          body: JSON.stringify({ action: 'global-data', symbols: batch })
         }).then(r => r.ok ? r.json() : null)
       )
     );
 
     results.forEach(r => {
-      if (r.status === 'fulfilled' && r.value) {
-        Object.assign(allData, r.value);
+      if (r.status === 'fulfilled' && r.value?.data) {
+        Object.assign(allData, r.value.data);
       }
     });
-
-    // Finnhub fallback for US indices if Yahoo failed
-    const usSyms = GLOBAL_SYMBOLS.us.map(s => s.sym);
-    const missingUS = usSyms.filter(s => !allData[s] || allData[s].error || !allData[s].price);
-    if (missingUS.length > 0) {
-      try {
-        const fhData = await finnhubApi('indices');
-        if (fhData?.data) {
-          const FH_MAP = { '^GSPC': '^GSPC', '^DJI': '^DJI', '^IXIC': '^IXIC', '^RUT': '^RUT',
-                           '^FTSE': '^FTSE', '^GDAXI': '^GDAXI', '^FCHI': '^FCHI',
-                           '^N225': '^N225', '^HSI': '^HSI', '000001.SS': '000001.SS' };
-          for (const [sym, fhSym] of Object.entries(FH_MAP)) {
-            if (fhData.data[fhSym] && (!allData[sym] || allData[sym].error || !allData[sym].price)) {
-              const q = fhData.data[fhSym];
-              allData[sym] = { price: q.price, prev: q.price / (1 + (q.change || 0) / 100), change: q.change || 0, high: q.high || 0, low: q.low || 0, name: sym, exchange: 'Finnhub' };
-            }
-          }
-        }
-      } catch(e) { console.warn('Finnhub fallback:', e); }
-    }
 
     PULSE.globalData = allData;
     return allData;
