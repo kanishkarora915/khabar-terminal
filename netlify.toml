@@ -4,10 +4,13 @@
 
 [functions]
   node_bundler = "esbuild"
-  external_node_modules = ["https"]
+  external_node_modules = ["https", "@netlify/blobs"]
 
 [functions."kite"]
   timeout = 26
+
+[functions."auth"]
+  timeout = 15
 
 [[headers]]
   for = "/*"

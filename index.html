@@ -221,6 +221,21 @@ body{background:var(--bg);color:var(--t);font-family:var(--f2);font-size:12px;ov
 .lic-footer{font-size:8px;color:var(--m);margin-top:24px;letter-spacing:1px;line-height:2}
 .lic-badge{display:inline-block;padding:4px 12px;border-radius:20px;font-size:8px;letter-spacing:2px;font-weight:700;margin-bottom:20px}
 .lic-ok{background:rgba(0,230,118,.1);color:var(--g);border:1px solid rgba(0,230,118,.3)}
+.lic-waiting{text-align:center;padding:10px 0}
+.lic-pulse{width:60px;height:60px;border-radius:50%;background:rgba(0,204,255,.1);border:3px solid var(--a);margin:0 auto 20px;display:flex;align-items:center;justify-content:center;animation:lic-breathe 2s ease-in-out infinite}
+@keyframes lic-breathe{0%,100%{transform:scale(1);box-shadow:0 0 0 0 rgba(0,204,255,.3)}50%{transform:scale(1.08);box-shadow:0 0 20px 8px rgba(0,204,255,.15)}}
+.lic-pulse-icon{font-size:24px}
+.lic-wait-title{font-size:14px;font-weight:700;color:var(--a);letter-spacing:2px;margin-bottom:6px}
+.lic-wait-sub{font-size:11px;color:var(--m);line-height:2}
+.lic-wait-key{display:inline-block;font-family:var(--f2);font-size:12px;color:var(--a);background:rgba(0,204,255,.06);border:1px solid rgba(0,204,255,.15);padding:6px 14px;border-radius:6px;letter-spacing:2px;margin:10px 0}
+.lic-wait-dots{display:flex;gap:6px;justify-content:center;margin:16px 0}
+.lic-wait-dots span{width:8px;height:8px;border-radius:50%;background:var(--a);opacity:.3;animation:lic-dot-pulse 1.4s ease-in-out infinite}
+.lic-wait-dots span:nth-child(2){animation-delay:.2s}
+.lic-wait-dots span:nth-child(3){animation-delay:.4s}
+@keyframes lic-dot-pulse{0%,100%{opacity:.3;transform:scale(1)}50%{opacity:1;transform:scale(1.3)}}
+.lic-rejected{text-align:center;padding:10px 0}
+.lic-rejected-icon{font-size:48px;margin-bottom:8px}
+.lic-rejected-text{color:var(--r);font-size:14px;font-weight:700;letter-spacing:1px}
 </style>
 </head>
 <body>
@@ -232,14 +247,40 @@ body{background:var(--bg);color:var(--t);font-family:var(--f2);font-size:12px;ov
       <div class="lic-logo">KHABAR</div>
       <div class="lic-sub">Professional Trading Terminal</div>
       <div class="lic-badge ba">LICENSED ACCESS ONLY</div>
-      <div>
+      <!-- Step 1: Enter Key -->
+      <div id="lic-step-enter">
         <input class="lic-input" id="lic-key-input" type="text" placeholder="Enter your license key" maxlength="20" autocomplete="off" spellcheck="false">
         <button class="lic-btn" id="lic-btn" onclick="validateLicense()">ACTIVATE</button>
         <div class="lic-error" id="lic-error"></div>
+        <div class="lic-footer">
+          LIFETIME LICENSE &bull; 1 KEY PER USER<br>
+          Contact admin for license keys
+        </div>
       </div>
-      <div class="lic-footer">
-        LIFETIME LICENSE &bull; 1 KEY PER USER<br>
-        Contact admin for license keys
+
+      <!-- Step 2: Waiting for Approval -->
+      <div id="lic-step-waiting" style="display:none">
+        <div class="lic-waiting">
+          <div class="lic-pulse"><span class="lic-pulse-icon">🔔</span></div>
+          <div class="lic-wait-title">WAITING FOR ADMIN APPROVAL</div>
+          <div class="lic-wait-key" id="lic-waiting-key"></div>
+          <div class="lic-wait-dots"><span></span><span></span><span></span></div>
+          <div class="lic-wait-sub">
+            Approval request sent to admin<br>
+            <span style="color:var(--a)">This screen will auto-unlock when approved</span><br>
+            <span style="font-size:9px;color:var(--m)">Checking every 5 seconds...</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 3: Rejected -->
+      <div id="lic-step-rejected" style="display:none">
+        <div class="lic-rejected">
+          <div class="lic-rejected-icon">🚫</div>
+          <div class="lic-rejected-text">ACCESS DENIED</div>
+          <p style="color:var(--m);font-size:11px;margin-top:8px;line-height:1.8">Your access was rejected by admin.<br>Contact admin for help.</p>
+          <button class="lic-btn" onclick="resetLicenseGate()" style="margin-top:16px;background:var(--bd);color:var(--t)">TRY ANOTHER KEY</button>
+        </div>
       </div>
     </div>
   </div>
@@ -927,8 +968,10 @@ const AUTH_API = '/.netlify/functions/auth';
 const $ = id => document.getElementById(id);
 
 // ═══════════════════════════════════════════════════════
-// LICENSE KEY SYSTEM
+// LICENSE KEY SYSTEM + ADMIN APPROVAL
 // ═══════════════════════════════════════════════════════
+let approvalPollTimer = null;
+
 async function validateLicense() {
   const inp = $('lic-key-input');
   const btn = $('lic-btn');
@@ -949,23 +992,28 @@ async function validateLicense() {
     });
     const data = await r.json();
 
-    if (data.valid) {
-      // Save license permanently
-      localStorage.setItem('khabar_license', key);
-      localStorage.setItem('khabar_license_user', data.user || '');
-      localStorage.setItem('khabar_license_plan', data.plan || 'PRO');
-
+    if (data.valid && data.approved) {
+      // APPROVED — unlock immediately
+      saveLicense(key, data.user, data.plan);
       err.style.color = 'var(--g)';
       err.textContent = '✓ ' + data.message;
       btn.textContent = 'ACTIVATED ✓';
+      showLicBadge(data.user);
+      setTimeout(() => { $('license-gate').classList.add('hidden'); }, 800);
 
-      const badge = $('lic-user-badge');
-      if (badge) { badge.textContent = (data.user || 'PRO') + ' ✓'; badge.style.display = 'inline-block'; }
+    } else if (data.valid && !data.approved && data.rejected) {
+      // REJECTED
+      showLicStep('rejected');
 
-      setTimeout(() => {
-        $('license-gate').classList.add('hidden');
-      }, 800);
+    } else if (data.valid && !data.approved) {
+      // PENDING — show waiting screen + start polling
+      localStorage.setItem('khabar_pending_key', key);
+      $('lic-waiting-key').textContent = key;
+      showLicStep('waiting');
+      startApprovalPolling(key);
+
     } else {
+      // INVALID KEY
       err.style.color = 'var(--r)';
       err.textContent = data.error || 'Invalid license key';
       btn.disabled = false;
@@ -981,34 +1029,123 @@ async function validateLicense() {
   }
 }
 
+function showLicStep(step) {
+  $('lic-step-enter').style.display = step === 'enter' ? 'block' : 'none';
+  $('lic-step-waiting').style.display = step === 'waiting' ? 'block' : 'none';
+  $('lic-step-rejected').style.display = step === 'rejected' ? 'block' : 'none';
+}
+
+function resetLicenseGate() {
+  localStorage.removeItem('khabar_pending_key');
+  if (approvalPollTimer) { clearInterval(approvalPollTimer); approvalPollTimer = null; }
+  showLicStep('enter');
+  $('lic-btn').disabled = false;
+  $('lic-btn').textContent = 'ACTIVATE';
+  $('lic-error').textContent = '';
+  $('lic-key-input').value = '';
+}
+
+function saveLicense(key, user, plan) {
+  localStorage.setItem('khabar_license', key);
+  localStorage.setItem('khabar_license_user', user || '');
+  localStorage.setItem('khabar_license_plan', plan || 'PRO');
+  localStorage.removeItem('khabar_pending_key');
+}
+
+function showLicBadge(user) {
+  const badge = $('lic-user-badge');
+  if (badge) { badge.textContent = (user || 'PRO') + ' ✓'; badge.style.display = 'inline-block'; }
+}
+
+function startApprovalPolling(key) {
+  if (approvalPollTimer) clearInterval(approvalPollTimer);
+  approvalPollTimer = setInterval(async () => {
+    try {
+      const r = await fetch(AUTH_API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'check', key })
+      });
+      const data = await r.json();
+
+      if (data.approved) {
+        clearInterval(approvalPollTimer);
+        approvalPollTimer = null;
+        saveLicense(key, data.user, data.plan);
+        showLicBadge(data.user);
+        // Show success briefly then unlock
+        $('lic-step-waiting').innerHTML = `
+          <div class="lic-waiting">
+            <div style="font-size:48px;margin-bottom:12px">✅</div>
+            <div class="lic-wait-title" style="color:var(--g)">ACCESS APPROVED!</div>
+            <div class="lic-wait-sub">Unlocking terminal...</div>
+          </div>
+        `;
+        setTimeout(() => { $('license-gate').classList.add('hidden'); }, 1500);
+      }
+
+      if (data.rejected) {
+        clearInterval(approvalPollTimer);
+        approvalPollTimer = null;
+        localStorage.removeItem('khabar_pending_key');
+        showLicStep('rejected');
+      }
+    } catch(e) {
+      // Network error — keep polling
+    }
+  }, 5000);
+}
+
 function checkLicenseOnLoad() {
   const saved = localStorage.getItem('khabar_license');
+  const pending = localStorage.getItem('khabar_pending_key');
+
   if (saved) {
-    // Validate saved key silently in background
+    // Already approved previously — validate silently
     fetch(AUTH_API, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'validate', key: saved })
     }).then(r => r.json()).then(data => {
-      if (data.valid) {
+      if (data.valid && data.approved) {
         $('license-gate').classList.add('hidden');
-        const badge = $('lic-user-badge');
-        if (badge) { badge.textContent = (data.user || 'PRO') + ' ✓'; badge.style.display = 'inline-block'; }
-      } else {
-        // Key was deactivated — force re-entry
+        showLicBadge(data.user);
+      } else if (data.valid && !data.approved && data.rejected) {
+        // Admin revoked access
         localStorage.removeItem('khabar_license');
         localStorage.removeItem('khabar_license_user');
         localStorage.removeItem('khabar_license_plan');
         $('license-gate').classList.remove('hidden');
-        $('lic-error').textContent = 'License deactivated. Enter a valid key.';
+        showLicStep('rejected');
+      } else if (data.valid && !data.approved) {
+        // Was approved before but somehow back to pending? Shouldn't happen, but handle
+        $('license-gate').classList.remove('hidden');
+        $('lic-waiting-key').textContent = saved;
+        showLicStep('waiting');
+        startApprovalPolling(saved);
+      } else {
+        // Key deactivated
+        localStorage.removeItem('khabar_license');
+        $('license-gate').classList.remove('hidden');
+        $('lic-error').textContent = 'License deactivated. Contact admin.';
         $('lic-error').style.color = 'var(--r)';
       }
     }).catch(() => {
-      // Network error — trust cached key (offline tolerance)
+      // Network error — trust cached approval (offline tolerance)
       $('license-gate').classList.add('hidden');
     });
+    return;
   }
-  // else: no saved key, show the gate (default)
+
+  if (pending) {
+    // Had a pending request — resume polling
+    $('lic-waiting-key').textContent = pending;
+    showLicStep('waiting');
+    startApprovalPolling(pending);
+    return;
+  }
+
+  // No saved key — show the license gate (default)
 }
 
 // Enter key to activate
