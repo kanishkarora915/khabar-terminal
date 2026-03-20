@@ -1189,8 +1189,31 @@ async function loadFnO(index, btn) {
   if (btn) btn.classList.add('on');
   toast(`Loading ${index} option chain...`, 'info');
 
-  const data = await api('option-chain', { symbol: index, type: 'indices' });
-  if (!data?.records?.data) { toast(`${index}: No option chain data`, 'err'); return; }
+  // Try NSE first, then show detailed error
+  let data = await nseApi('option-chain', { symbol: index, type: 'indices' });
+
+  if (!data?.records?.data) {
+    // NSE failed — try with slight delay (cookie issue)
+    toast(`Retrying ${index} option chain...`, 'info');
+    await new Promise(r => setTimeout(r, 1500));
+    data = await nseApi('option-chain', { symbol: index, type: 'indices' });
+  }
+
+  if (!data?.records?.data) {
+    // Still failed — show error with details
+    const errMsg = data?.error || 'NSE may be blocking cloud requests';
+    toast(`${index}: Option chain failed — ${errMsg}`, 'err');
+
+    // Show helpful message in the UI
+    $('oc-body').innerHTML = `<tr><td colspan="11" style="color:var(--r);text-align:center;padding:20px">
+      <b>NSE Option Chain Loading Failed</b><br>
+      <span style="color:var(--m);font-size:10px">Error: ${errMsg}</span><br><br>
+      <span style="color:var(--m);font-size:10px">This happens when NSE blocks cloud server requests.<br>
+      Try clicking <b>REFRESH</b> button, or check back during market hours (9:15 AM - 3:30 PM).</span>
+    </td></tr>`;
+    return;
+  }
+
   APP.fno.data = data;
 
   // Set expiry dates
@@ -1199,7 +1222,7 @@ async function loadFnO(index, btn) {
   APP.fno.expiry = data.records.expiryDates?.[0] || '';
 
   processAndRenderOC(data);
-  toast(`${index} loaded ✓`);
+  toast(`${index} option chain loaded ✓`);
 }
 
 function changeExpiry() {
