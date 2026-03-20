@@ -303,6 +303,24 @@ body{background:var(--bg);color:var(--t);font-family:var(--f2);font-size:12px;ov
       <div style="max-height:280px;overflow-y:auto"><table class="tbl" id="fib-table"><tr><td style="color:var(--m);text-align:center">Analyze a stock first</td></tr></table></div>
     </div>
   </div>
+
+  <!-- NIFTY 50 GAINERS & LOSERS -->
+  <div class="g2">
+    <div class="pn">
+      <div class="ph"><div class="pt">🟢 TOP GAINERS — NIFTY 50</div><span class="badge bg">LIVE</span></div>
+      <div id="gainers-panel" style="max-height:260px;overflow-y:auto"><div style="color:var(--m);text-align:center;padding:15px"><span class="spin"></span> Loading...</div></div>
+    </div>
+    <div class="pn">
+      <div class="ph"><div class="pt">🔴 TOP LOSERS — NIFTY 50</div><span class="badge br">LIVE</span></div>
+      <div id="losers-panel" style="max-height:260px;overflow-y:auto"><div style="color:var(--m);text-align:center;padding:15px"><span class="spin"></span> Loading...</div></div>
+    </div>
+  </div>
+
+  <!-- MARKET OVERVIEW -->
+  <div class="pn" style="margin-bottom:12px">
+    <div class="ph"><div class="pt">📊 MARKET OVERVIEW — ALL INDICES</div><span class="badge ba" id="mkt-update-time">—</span></div>
+    <div id="market-overview" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px"><div style="color:var(--m);text-align:center;padding:15px;grid-column:span 4"><span class="spin"></span> Loading indices...</div></div>
+  </div>
 </div>
 
 <!-- ═══════════ F&O PAGE ═══════════ -->
@@ -390,6 +408,30 @@ body{background:var(--bg);color:var(--t);font-family:var(--f2);font-size:12px;ov
     <div class="pn">
       <div class="ph"><div class="pt">📡 MARKET TREND SIGNAL</div><span class="badge bg">LIVE</span></div>
       <div id="trend-signal"><div style="color:var(--m);text-align:center;padding:15px">Calculating...</div></div>
+    </div>
+  </div>
+
+  <!-- GREEKS + IV ANALYSIS (Sensibull-style) -->
+  <div class="g2">
+    <div class="pn">
+      <div class="ph"><div class="pt">📊 IV ANALYSIS — VOLATILITY SKEW</div><span class="badge bp">SENSIBULL STYLE</span></div>
+      <div id="iv-analysis" style="max-height:280px;overflow-y:auto"><div style="color:var(--m);text-align:center;padding:15px">Load option chain to see IV data</div></div>
+    </div>
+    <div class="pn">
+      <div class="ph"><div class="pt">🧮 GREEKS — ATM OPTIONS</div><span class="badge ba">LIVE</span></div>
+      <div id="greeks-panel"><div style="color:var(--m);text-align:center;padding:15px">Load option chain first</div></div>
+    </div>
+  </div>
+
+  <!-- STRADDLE + STRATEGY -->
+  <div class="g2">
+    <div class="pn">
+      <div class="ph"><div class="pt">⚖ ATM STRADDLE PRICE</div><span class="badge by">KEY METRIC</span></div>
+      <div id="straddle-panel"><div style="color:var(--m);text-align:center;padding:15px">Loading...</div></div>
+    </div>
+    <div class="pn">
+      <div class="ph"><div class="pt">🔥 TOP MOVERS — OI CHANGE</div><span class="badge br">HOT</span></div>
+      <div id="top-movers-oi" style="max-height:250px;overflow-y:auto"><div style="color:var(--m);text-align:center;padding:15px">Loading...</div></div>
     </div>
   </div>
 </div>
@@ -632,6 +674,7 @@ async function refreshIndices() {
     }
   });
   updateSectorHeatmap(data.data);
+  updateMarketOverview(data.data);
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1244,6 +1287,12 @@ function processAndRenderOC(raw) {
 
   // Trend signal
   renderTrendSignal(allData, spot, pcrVal, maxPain, maxCallOI, maxPutOI);
+
+  // Sensibull-style features
+  renderIVAnalysis(allData, spot);
+  renderGreeks(allData, spot);
+  renderStraddlePanel(allData, spot);
+  renderTopMoversOI(allData);
 }
 
 function calculateMaxPain(data) {
@@ -1460,6 +1509,198 @@ function renderTrendSignal(data, spot, pcr, maxPain, maxCallOI, maxPutOI) {
 }
 
 // ═══════════════════════════════════════════════════════
+// SENSIBULL-STYLE: IV ANALYSIS, GREEKS, STRADDLE
+// ═══════════════════════════════════════════════════════
+function renderIVAnalysis(data, spot) {
+  // IV Skew: compare call IV vs put IV across strikes
+  const atmIdx = data.reduce((best, r, i) => Math.abs(r.strikePrice - spot) < Math.abs(data[best]?.strikePrice - spot || 99999) ? i : best, 0);
+  const nearATM = data.slice(Math.max(0, atmIdx - 8), atmIdx + 9);
+
+  let html = '<table class="tbl"><tr><th>Strike</th><th>Call IV</th><th>Put IV</th><th>IV Skew</th><th>Signal</th></tr>';
+  let avgCallIV = 0, avgPutIV = 0, count = 0;
+
+  nearATM.forEach(r => {
+    const cIV = r.CE?.impliedVolatility || 0;
+    const pIV = r.PE?.impliedVolatility || 0;
+    const skew = (cIV - pIV).toFixed(1);
+    const isATM = r.strikePrice === data[atmIdx]?.strikePrice;
+    const signal = cIV > pIV + 3 ? '<span class="dn">BEARISH</span>' : pIV > cIV + 3 ? '<span class="up">BULLISH</span>' : '<span class="neu">NEUTRAL</span>';
+    if (cIV > 0) { avgCallIV += cIV; count++; }
+    if (pIV > 0) avgPutIV += pIV;
+
+    html += `<tr style="${isATM ? 'background:rgba(255,193,7,.08);font-weight:700' : ''}">
+      <td style="color:var(--y)">${r.strikePrice}</td>
+      <td style="color:var(--g)">${cIV.toFixed(1)}%</td>
+      <td style="color:var(--r)">${pIV.toFixed(1)}%</td>
+      <td style="color:${parseFloat(skew) > 0 ? 'var(--r)' : 'var(--g)'}">${skew}</td>
+      <td>${signal}</td>
+    </tr>`;
+  });
+  html += '</table>';
+
+  avgCallIV = count > 0 ? (avgCallIV / count).toFixed(1) : 0;
+  avgPutIV = count > 0 ? (avgPutIV / count).toFixed(1) : 0;
+  const ivBias = avgCallIV > avgPutIV ? 'BEARISH (calls expensive)' : 'BULLISH (puts expensive)';
+  const ivColor = avgCallIV > avgPutIV ? 'var(--r)' : 'var(--g)';
+
+  $('iv-analysis').innerHTML = `<div style="display:flex;gap:16px;margin-bottom:10px;font-size:11px">
+    <span>Avg Call IV: <b style="color:var(--g)">${avgCallIV}%</b></span>
+    <span>Avg Put IV: <b style="color:var(--r)">${avgPutIV}%</b></span>
+    <span>IV Bias: <b style="color:${ivColor}">${ivBias}</b></span>
+  </div>${html}`;
+}
+
+function renderGreeks(data, spot) {
+  // Find ATM strike
+  const atm = data.reduce((best, r) => Math.abs(r.strikePrice - spot) < Math.abs(best.strikePrice - spot) ? r : best, data[0]);
+  if (!atm) return;
+
+  const ce = atm.CE || {}, pe = atm.PE || {};
+  // Approximate Greeks from available data
+  const daysToExpiry = 7; // approximate
+  const ceIV = (ce.impliedVolatility || 15) / 100;
+  const peIV = (pe.impliedVolatility || 15) / 100;
+  // Black-Scholes approximations for ATM
+  const ceDelta = 0.5 + (ceIV > 0.1 ? 0.02 : -0.02);
+  const peDelta = -(0.5 + (peIV > 0.1 ? 0.02 : -0.02));
+  const gamma = (1 / (spot * ceIV * Math.sqrt(daysToExpiry / 365))) * 0.4;
+  const ceTheta = -(spot * ceIV / (2 * Math.sqrt(daysToExpiry / 365 * 2 * Math.PI))) / 365;
+  const peTheta = ceTheta;
+  const ceVega = spot * Math.sqrt(daysToExpiry / 365) / (100 * Math.sqrt(2 * Math.PI));
+
+  $('greeks-panel').innerHTML = `
+    <div style="text-align:center;margin-bottom:10px;font-size:11px;color:var(--m)">ATM Strike: <b style="color:var(--y)">${atm.strikePrice}</b></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div style="background:var(--bg);border-radius:6px;padding:10px">
+        <div style="font-size:9px;color:var(--g);letter-spacing:1px;margin-bottom:6px">CALL ${atm.strikePrice} CE</div>
+        <div style="font-size:11px;line-height:2">
+          <div>LTP: <b style="color:var(--t)">${(ce.lastPrice || 0).toFixed(2)}</b></div>
+          <div>IV: <b style="color:var(--a)">${(ce.impliedVolatility || 0).toFixed(1)}%</b></div>
+          <div>Delta: <b style="color:var(--g)">${ceDelta.toFixed(3)}</b></div>
+          <div>Gamma: <b style="color:var(--p)">${gamma.toFixed(4)}</b></div>
+          <div>Theta: <b style="color:var(--r)">${ceTheta.toFixed(2)}</b></div>
+          <div>Vega: <b style="color:var(--a)">${ceVega.toFixed(2)}</b></div>
+          <div>OI: <b style="color:var(--m)">${fmtL(ce.openInterest || 0)}</b></div>
+        </div>
+      </div>
+      <div style="background:var(--bg);border-radius:6px;padding:10px">
+        <div style="font-size:9px;color:var(--r);letter-spacing:1px;margin-bottom:6px">PUT ${atm.strikePrice} PE</div>
+        <div style="font-size:11px;line-height:2">
+          <div>LTP: <b style="color:var(--t)">${(pe.lastPrice || 0).toFixed(2)}</b></div>
+          <div>IV: <b style="color:var(--a)">${(pe.impliedVolatility || 0).toFixed(1)}%</b></div>
+          <div>Delta: <b style="color:var(--r)">${peDelta.toFixed(3)}</b></div>
+          <div>Gamma: <b style="color:var(--p)">${gamma.toFixed(4)}</b></div>
+          <div>Theta: <b style="color:var(--r)">${peTheta.toFixed(2)}</b></div>
+          <div>Vega: <b style="color:var(--a)">${ceVega.toFixed(2)}</b></div>
+          <div>OI: <b style="color:var(--m)">${fmtL(pe.openInterest || 0)}</b></div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function renderStraddlePanel(data, spot) {
+  const atm = data.reduce((best, r) => Math.abs(r.strikePrice - spot) < Math.abs(best.strikePrice - spot) ? r : best, data[0]);
+  if (!atm) return;
+
+  const ceLTP = atm.CE?.lastPrice || 0;
+  const peLTP = atm.PE?.lastPrice || 0;
+  const straddlePrice = ceLTP + peLTP;
+  const straddlePct = spot > 0 ? ((straddlePrice / spot) * 100).toFixed(2) : 0;
+  const upperBE = atm.strikePrice + straddlePrice;
+  const lowerBE = atm.strikePrice - straddlePrice;
+
+  $('straddle-panel').innerHTML = `
+    <div style="text-align:center">
+      <div style="font-family:var(--f1);font-size:32px;font-weight:800;color:var(--y)">${straddlePrice.toFixed(2)}</div>
+      <div style="font-size:10px;color:var(--m);margin:4px 0">ATM Straddle @ ${atm.strikePrice} = ${straddlePct}% of spot</div>
+      <div style="display:flex;justify-content:center;gap:20px;margin-top:10px;font-size:11px">
+        <span>CE: <b class="up">${ceLTP.toFixed(2)}</b></span>
+        <span>PE: <b class="dn">${peLTP.toFixed(2)}</b></span>
+      </div>
+      <div style="display:flex;justify-content:center;gap:20px;margin-top:8px;font-size:11px;color:var(--m)">
+        <span>Lower BE: <b class="dn">${lowerBE.toFixed(0)}</b></span>
+        <span>Upper BE: <b class="up">${upperBE.toFixed(0)}</b></span>
+      </div>
+      <div style="margin-top:10px;font-size:10px;color:var(--m)">
+        Expected move: <b style="color:var(--p)">±${straddlePrice.toFixed(0)} pts</b> (${straddlePct}%)
+      </div>
+    </div>`;
+}
+
+function renderTopMoversOI(data) {
+  // Top OI change strikes (both calls and puts combined)
+  let movers = [];
+  data.forEach(r => {
+    if (r.CE && Math.abs(r.CE.changeinOpenInterest || 0) > 0) {
+      movers.push({ strike: r.strikePrice, type: 'CE', chg: r.CE.changeinOpenInterest, oi: r.CE.openInterest || 0, ltp: r.CE.lastPrice || 0, pChg: r.CE.pChange || 0 });
+    }
+    if (r.PE && Math.abs(r.PE.changeinOpenInterest || 0) > 0) {
+      movers.push({ strike: r.strikePrice, type: 'PE', chg: r.PE.changeinOpenInterest, oi: r.PE.openInterest || 0, ltp: r.PE.lastPrice || 0, pChg: r.PE.pChange || 0 });
+    }
+  });
+  movers.sort((a, b) => Math.abs(b.chg) - Math.abs(a.chg));
+
+  $('top-movers-oi').innerHTML = movers.slice(0, 12).map(m => {
+    const up = m.chg > 0;
+    const color = m.type === 'CE' ? (up ? 'var(--r)' : 'var(--g)') : (up ? 'var(--g)' : 'var(--r)');
+    const label = m.type === 'CE' ? (up ? 'Call Writing' : 'Call Unwinding') : (up ? 'Put Writing' : 'Put Unwinding');
+    return `<div class="strike-item">
+      <div><b>${m.strike} ${m.type}</b><div style="font-size:9px;color:${color}">${label}</div></div>
+      <div style="text-align:right"><b style="color:${up ? 'var(--a)' : 'var(--r)'};">${up ? '+' : ''}${fmtL(m.chg)}</b><div style="font-size:8px;color:var(--m)">OI: ${fmtL(m.oi)}</div></div>
+    </div>`;
+  }).join('') || '<div style="color:var(--m);text-align:center;padding:10px">No OI changes</div>';
+}
+
+// ═══════════════════════════════════════════════════════
+// GAINERS / LOSERS / MARKET OVERVIEW
+// ═══════════════════════════════════════════════════════
+async function refreshGainersLosers() {
+  const data = await nseApi('index-stocks', { index: 'NIFTY 50' });
+  if (!data?.data) return;
+
+  const stocks = data.data.filter(s => s.symbol && s.lastPrice);
+  const sorted = [...stocks].sort((a, b) => parseFloat(b.pChange || 0) - parseFloat(a.pChange || 0));
+  const gainers = sorted.filter(s => parseFloat(s.pChange) > 0).slice(0, 8);
+  const losers = sorted.filter(s => parseFloat(s.pChange) < 0).reverse().slice(0, 8);
+
+  const renderList = (items, isGainer) => items.map(s => {
+    const pChg = parseFloat(s.pChange || 0);
+    return `<div style="display:flex;justify-content:space-between;padding:5px 8px;background:var(--bg);border-radius:4px;margin-bottom:3px;font-size:10px;border-left:3px solid ${isGainer ? 'var(--g)' : 'var(--r)'}">
+      <span style="font-weight:700;color:var(--a);cursor:pointer" onclick="quickLoad('${s.symbol}')">${s.symbol}</span>
+      <span>${fmt(s.lastPrice)}</span>
+      <span class="${isGainer ? 'up' : 'dn'}" style="font-weight:700">${pChg > 0 ? '+' : ''}${pChg.toFixed(2)}%</span>
+    </div>`;
+  }).join('');
+
+  $('gainers-panel').innerHTML = renderList(gainers, true) || '<div style="color:var(--m);text-align:center">No data</div>';
+  $('losers-panel').innerHTML = renderList(losers, false) || '<div style="color:var(--m);text-align:center">No data</div>';
+}
+
+function updateMarketOverview(allIdx) {
+  if (!allIdx) return;
+  const KEY_INDICES = ['NIFTY 50', 'NIFTY BANK', 'NIFTY FINANCIAL SERVICES', 'NIFTY IT', 'NIFTY MIDCAP 100', 'NIFTY PHARMA', 'NIFTY AUTO', 'NIFTY METAL', 'NIFTY REALTY', 'NIFTY ENERGY', 'NIFTY FMCG', 'NIFTY MEDIA', 'NIFTY PSU BANK', 'NIFTY NEXT 50', 'S&P BSE SENSEX', 'NIFTY MIDCAP 50'];
+
+  let html = '';
+  KEY_INDICES.forEach(name => {
+    const idx = allIdx.find(x => x.index === name);
+    if (!idx) return;
+    const pct = parseFloat(idx.percentChange || 0);
+    const up = pct >= 0;
+    const bg = up ? 'rgba(0,230,118,.08)' : 'rgba(255,51,85,.08)';
+    const border = up ? 'rgba(0,230,118,.3)' : 'rgba(255,51,85,.3)';
+    const short = name.replace('NIFTY ', '').replace('S&P BSE ', '');
+    html += `<div style="background:${bg};border:1px solid ${border};border-radius:6px;padding:8px;text-align:center">
+      <div style="font-size:8px;color:var(--m);letter-spacing:1px;margin-bottom:3px">${short}</div>
+      <div style="font-family:var(--f1);font-size:13px;font-weight:700;color:var(--t)">${Number(idx.last).toLocaleString('en-IN', {maximumFractionDigits: 0})}</div>
+      <div style="font-size:10px;font-weight:700;color:${up ? 'var(--g)' : 'var(--r)'}">${up ? '+' : ''}${pct.toFixed(2)}%</div>
+    </div>`;
+  });
+
+  $('market-overview').innerHTML = html;
+  $('mkt-update-time').textContent = new Date().toLocaleTimeString('en-IN', { hour12: false });
+}
+
+// ═══════════════════════════════════════════════════════
 // NAVIGATION
 // ═══════════════════════════════════════════════════════
 function showPage(page, btn) {
@@ -1513,9 +1754,26 @@ function startRefresh() {
 // ═══════════════════════════════════════════════════════
 async function initDashboard() {
   toast('Loading market data...', 'info');
-  await Promise.all([refreshIndices(), refreshNews(), refreshBankOI()]);
+
+  // Load all data in parallel — show last session data even when market closed
+  const results = await Promise.allSettled([
+    refreshIndices(),
+    refreshNews(),
+    refreshBankOI(),
+    refreshGainersLosers(),
+    loadFnO('NIFTY', $('fno-nifty')),  // Pre-load option chain
+  ]);
+
+  // Auto-load NIFTY 50 on equity page for quick view
+  $('search-input').value = 'NIFTY 50';
+
   startRefresh();
   toast('KHABAR Terminal Ready ✓');
+
+  // Log any failures for debugging
+  results.forEach((r, i) => {
+    if (r.status === 'rejected') console.warn(`Init task ${i} failed:`, r.reason);
+  });
 }
 
 window.onload = async () => {
