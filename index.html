@@ -1120,9 +1120,21 @@ function onKiteExpired() {
 }
 
 function logout() {
+  // Stop all timers
+  Object.keys(APP.timers).forEach(k => { clearInterval(APP.timers[k]); delete APP.timers[k]; });
+  // Reset Kite state
   localStorage.removeItem('khabar_access_token');
   APP.kite.access_token = '';
   APP.kite.active = false;
+  APP.connected = false;
+  // Reset data
+  APP.fno = { index: 'NIFTY', expiry: '', data: null, processed: null, prevOI: {}, oiHistory: [], alertStrikes: {} };
+  APP.stock = null;
+  APP.pulseData = {};
+  // UI reset
+  $('conn-dot').className = 'dot dr';
+  $('conn-txt').textContent = 'DISCONNECTED';
+  $('relogin-bar')?.classList.add('hidden');
   $('login-screen').classList.remove('hidden');
 }
 
@@ -1995,10 +2007,19 @@ async function loadFnO(index, btn) {
 
   APP.fno.data = data;
 
-  // Set expiry dates
+  // Set expiry dates — preserve user's selection if it still exists
   const sel = $('expiry-sel');
-  sel.innerHTML = (data.records.expiryDates || []).map((d, i) => `<option value="${d}" ${i===0?'selected':''}>${d}</option>`).join('');
-  APP.fno.expiry = data.records.expiryDates?.[0] || '';
+  const prevExpiry = APP.fno.expiry;
+  const expiryList = data.records.expiryDates || [];
+  sel.innerHTML = expiryList.map(d => `<option value="${d}" ${d === prevExpiry ? 'selected' : ''}>${d}</option>`).join('');
+
+  // Keep previous expiry if it exists in new data, otherwise default to first
+  if (prevExpiry && expiryList.includes(prevExpiry)) {
+    APP.fno.expiry = prevExpiry;
+    sel.value = prevExpiry;
+  } else {
+    APP.fno.expiry = expiryList[0] || '';
+  }
 
   processAndRenderOC(data);
   toast(`${index} option chain loaded ✓`);
@@ -2006,11 +2027,12 @@ async function loadFnO(index, btn) {
 
 async function changeExpiry() {
   const newExpiry = $('expiry-sel').value;
+  if (!newExpiry || newExpiry === APP.fno.expiry) return;
   APP.fno.expiry = newExpiry;
+  toast(`Switching to ${newExpiry}...`, 'info');
 
   // If Kite is active, re-fetch for new expiry (Kite returns data per expiry)
   if (APP.kite.active) {
-    toast(`Loading ${APP.fno.index} ${newExpiry}...`, 'info');
     try {
       const data = await kiteApi('option-chain', { symbol: APP.fno.index, expiry: newExpiry });
       if (data?.records?.data) {
@@ -2024,8 +2046,13 @@ async function changeExpiry() {
     } catch(e) { console.warn('Kite expiry change failed:', e); }
   }
 
-  // NSE data has all expiries in one response, just re-render
-  if (APP.fno.data) processAndRenderOC(APP.fno.data);
+  // NSE data has all expiries in one response, just re-render with new expiry
+  if (APP.fno.data) {
+    processAndRenderOC(APP.fno.data);
+    // Also update Trade Options if on that page
+    if (APP.page === 'options') renderAllTradeOptions();
+    toast(`${APP.fno.index} ${newExpiry} loaded ✓`);
+  }
 }
 
 function refreshFnO() { loadFnO(APP.fno.index, document.querySelector(`#fno-${APP.fno.index.toLowerCase().replace('nifty','nifty')}`)); }
@@ -2033,13 +2060,28 @@ function refreshFnO() { loadFnO(APP.fno.index, document.querySelector(`#fno-${AP
 function processAndRenderOC(raw) {
   const expiry = APP.fno.expiry;
   const allData = raw.records.data.filter(r => r.expiryDate === expiry);
-  if (!allData.length) return;
+  if (!allData.length) {
+    // If selected expiry has no data, fallback to first available
+    const firstExpiry = raw.records.expiryDates?.[0];
+    if (firstExpiry && firstExpiry !== expiry) {
+      APP.fno.expiry = firstExpiry;
+      const sel = $('expiry-sel');
+      if (sel) sel.value = firstExpiry;
+      return processAndRenderOC(raw);
+    }
+    return;
+  }
 
   const spot = allData[0]?.CE?.underlyingValue || allData[0]?.PE?.underlyingValue || 0;
-  const totCallOI = raw.filtered?.CE?.totOI || 0;
-  const totPutOI = raw.filtered?.PE?.totOI || 0;
-  const totCallVol = raw.filtered?.CE?.totVol || 0;
-  const totPutVol = raw.filtered?.PE?.totVol || 0;
+
+  // Calculate totals from filtered expiry data (not raw.filtered which is only for default expiry)
+  let totCallOI = 0, totPutOI = 0, totCallVol = 0, totPutVol = 0;
+  allData.forEach(r => {
+    totCallOI += r.CE?.openInterest || 0;
+    totPutOI += r.PE?.openInterest || 0;
+    totCallVol += r.CE?.totalTradedVolume || 0;
+    totPutVol += r.PE?.totalTradedVolume || 0;
+  });
   const pcr = totCallOI > 0 ? (totPutOI / totCallOI).toFixed(2) : '—';
 
   // Max Pain
@@ -2547,8 +2589,14 @@ async function loadTradeOptions(index, btn) {
 function renderAllTradeOptions() {
   const raw = APP.fno.data;
   if (!raw?.records?.data) return;
-  const expiry = APP.fno.expiry;
-  const allData = raw.records.data.filter(r => r.expiryDate === expiry);
+  let expiry = APP.fno.expiry;
+  let allData = raw.records.data.filter(r => r.expiryDate === expiry);
+  // Fallback to first expiry if selected one has no data
+  if (!allData.length && raw.records.expiryDates?.length) {
+    expiry = raw.records.expiryDates[0];
+    APP.fno.expiry = expiry;
+    allData = raw.records.data.filter(r => r.expiryDate === expiry);
+  }
   if (!allData.length) return;
 
   const spot = allData[0]?.CE?.underlyingValue || allData[0]?.PE?.underlyingValue || 0;
@@ -4254,6 +4302,9 @@ async function refreshPulse() {
 // REFRESH TIMERS
 // ═══════════════════════════════════════════════════════
 function startRefresh() {
+  // Clear any existing timers first (prevent duplicates)
+  Object.keys(APP.timers).forEach(k => { clearInterval(APP.timers[k]); delete APP.timers[k]; });
+
   // Indices every 10s
   APP.timers.indices = setInterval(() => {
     if (document.visibilityState === 'visible') refreshIndices();
