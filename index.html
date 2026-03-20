@@ -182,9 +182,48 @@ body{background:var(--bg);color:var(--t);font-family:var(--f2);font-size:12px;ov
 .login-hint{font-size:9px;color:var(--m);line-height:1.8;margin-top:16px;padding:10px;background:rgba(0,0,0,.3);border-radius:6px}
 .relogin-bar{background:linear-gradient(90deg,rgba(255,51,85,.15),rgba(255,107,53,.1));border:1px solid var(--r);border-radius:8px;padding:10px 16px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;font-size:11px}
 .relogin-bar.hidden{display:none}
+/* LICENSE GATE */
+#license-gate{position:fixed;inset:0;background:var(--bg);z-index:10000;display:flex;align-items:center;justify-content:center;flex-direction:column}
+#license-gate.hidden{display:none}
+.lic-card{background:var(--s1);border:1px solid var(--bd);border-radius:20px;padding:48px 44px;width:480px;text-align:center;position:relative;overflow:hidden}
+.lic-card::before{content:'';position:absolute;top:-50%;left:-50%;width:200%;height:200%;background:conic-gradient(from 0deg,transparent,rgba(0,204,255,.03),transparent,rgba(179,136,255,.03),transparent);animation:lic-rotate 8s linear infinite}
+@keyframes lic-rotate{to{transform:rotate(360deg)}}
+.lic-inner{position:relative;z-index:1}
+.lic-logo{font-family:var(--f1);font-size:48px;font-weight:800;letter-spacing:8px;background:linear-gradient(135deg,var(--a),var(--p),var(--a2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:4px}
+.lic-sub{font-size:9px;color:var(--m);letter-spacing:4px;margin-bottom:32px;text-transform:uppercase}
+.lic-input{width:100%;background:var(--bg);border:2px solid var(--bd);color:var(--t);padding:14px 18px;border-radius:10px;font-family:var(--f2);font-size:14px;font-weight:700;outline:none;text-align:center;letter-spacing:3px;text-transform:uppercase;transition:border-color .3s}
+.lic-input:focus{border-color:var(--a);box-shadow:0 0 20px rgba(0,204,255,.1)}
+.lic-input::placeholder{font-size:10px;letter-spacing:1px;font-weight:400;text-transform:none;color:var(--m)}
+.lic-btn{display:block;width:100%;padding:14px;background:linear-gradient(135deg,var(--a),#387ed1);color:#000;border:none;border-radius:10px;font-family:var(--f1);font-size:13px;font-weight:800;cursor:pointer;letter-spacing:3px;margin-top:16px;transition:all .3s}
+.lic-btn:hover{filter:brightness(1.15);transform:translateY(-2px);box-shadow:0 8px 30px rgba(0,204,255,.2)}
+.lic-btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+.lic-error{color:var(--r);font-size:11px;margin-top:10px;min-height:18px;font-weight:600}
+.lic-footer{font-size:8px;color:var(--m);margin-top:24px;letter-spacing:1px;line-height:2}
+.lic-badge{display:inline-block;padding:4px 12px;border-radius:20px;font-size:8px;letter-spacing:2px;font-weight:700;margin-bottom:20px}
+.lic-ok{background:rgba(0,230,118,.1);color:var(--g);border:1px solid rgba(0,230,118,.3)}
 </style>
 </head>
 <body>
+
+<!-- LICENSE GATE -->
+<div id="license-gate">
+  <div class="lic-card">
+    <div class="lic-inner">
+      <div class="lic-logo">KHABAR</div>
+      <div class="lic-sub">Professional Trading Terminal</div>
+      <div class="lic-badge ba">LICENSED ACCESS ONLY</div>
+      <div>
+        <input class="lic-input" id="lic-key-input" type="text" placeholder="Enter your license key" maxlength="20" autocomplete="off" spellcheck="false">
+        <button class="lic-btn" id="lic-btn" onclick="validateLicense()">ACTIVATE</button>
+        <div class="lic-error" id="lic-error"></div>
+      </div>
+      <div class="lic-footer">
+        LIFETIME LICENSE &bull; 1 KEY PER USER<br>
+        Contact admin for license keys
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- LOGIN SCREEN -->
 <div id="login-screen">
@@ -254,6 +293,7 @@ body{background:var(--bg);color:var(--t);font-family:var(--f2);font-size:12px;ov
     <span><span class="dot dg" id="conn-dot"></span><span id="conn-txt">CONNECTING</span></span>
     <span id="hclock" style="color:var(--a)">--:--:--</span>
     <span id="mkt-st">—</span>
+    <span id="lic-user-badge" style="font-size:8px;padding:3px 8px;border-radius:10px;background:rgba(0,204,255,.08);color:var(--a);border:1px solid rgba(0,204,255,.2);letter-spacing:1px;display:none">PRO</span>
     <button class="btn btn-b" onclick="logout()" style="padding:4px 10px;font-size:9px">LOGOUT</button>
   </div>
 </div>
@@ -862,7 +902,99 @@ const NSE_API = '/.netlify/functions/nse';
 const KITE_API = '/.netlify/functions/kite';
 const NEWS_API = '/.netlify/functions/news';
 const FINNHUB_API = '/.netlify/functions/finnhub';
+const AUTH_API = '/.netlify/functions/auth';
 const $ = id => document.getElementById(id);
+
+// ═══════════════════════════════════════════════════════
+// LICENSE KEY SYSTEM
+// ═══════════════════════════════════════════════════════
+async function validateLicense() {
+  const inp = $('lic-key-input');
+  const btn = $('lic-btn');
+  const err = $('lic-error');
+  const key = (inp.value || '').trim().toUpperCase();
+
+  if (!key) { err.textContent = 'Please enter your license key'; return; }
+
+  btn.disabled = true;
+  btn.textContent = 'VALIDATING...';
+  err.textContent = '';
+
+  try {
+    const r = await fetch(AUTH_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'validate', key })
+    });
+    const data = await r.json();
+
+    if (data.valid) {
+      // Save license permanently
+      localStorage.setItem('khabar_license', key);
+      localStorage.setItem('khabar_license_user', data.user || '');
+      localStorage.setItem('khabar_license_plan', data.plan || 'PRO');
+
+      err.style.color = 'var(--g)';
+      err.textContent = '✓ ' + data.message;
+      btn.textContent = 'ACTIVATED ✓';
+
+      const badge = $('lic-user-badge');
+      if (badge) { badge.textContent = (data.user || 'PRO') + ' ✓'; badge.style.display = 'inline-block'; }
+
+      setTimeout(() => {
+        $('license-gate').classList.add('hidden');
+      }, 800);
+    } else {
+      err.style.color = 'var(--r)';
+      err.textContent = data.error || 'Invalid license key';
+      btn.disabled = false;
+      btn.textContent = 'ACTIVATE';
+      inp.style.borderColor = 'var(--r)';
+      setTimeout(() => { inp.style.borderColor = 'var(--bd)'; }, 2000);
+    }
+  } catch (e) {
+    err.style.color = 'var(--r)';
+    err.textContent = 'Server error — try again';
+    btn.disabled = false;
+    btn.textContent = 'ACTIVATE';
+  }
+}
+
+function checkLicenseOnLoad() {
+  const saved = localStorage.getItem('khabar_license');
+  if (saved) {
+    // Validate saved key silently in background
+    fetch(AUTH_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'validate', key: saved })
+    }).then(r => r.json()).then(data => {
+      if (data.valid) {
+        $('license-gate').classList.add('hidden');
+        const badge = $('lic-user-badge');
+        if (badge) { badge.textContent = (data.user || 'PRO') + ' ✓'; badge.style.display = 'inline-block'; }
+      } else {
+        // Key was deactivated — force re-entry
+        localStorage.removeItem('khabar_license');
+        localStorage.removeItem('khabar_license_user');
+        localStorage.removeItem('khabar_license_plan');
+        $('license-gate').classList.remove('hidden');
+        $('lic-error').textContent = 'License deactivated. Enter a valid key.';
+        $('lic-error').style.color = 'var(--r)';
+      }
+    }).catch(() => {
+      // Network error — trust cached key (offline tolerance)
+      $('license-gate').classList.add('hidden');
+    });
+  }
+  // else: no saved key, show the gate (default)
+}
+
+// Enter key to activate
+document.addEventListener('DOMContentLoaded', () => {
+  const inp = $('lic-key-input');
+  if (inp) inp.addEventListener('keydown', e => { if (e.key === 'Enter') validateLicense(); });
+});
 const fmt = v => '₹' + Number(v).toLocaleString('en-IN', { maximumFractionDigits: 2 });
 const fmtL = v => v >= 1e7 ? (v/1e7).toFixed(2) + ' Cr' : v >= 1e5 ? (v/1e5).toFixed(2) + ' L' : v >= 1e3 ? (v/1e3).toFixed(1) + 'K' : String(v||0);
 
@@ -4166,6 +4298,9 @@ async function initDashboard() {
 }
 
 window.onload = async () => {
+  // License check first
+  checkLicenseOnLoad();
+
   loadSavedCredentials();
 
   // Check for Zerodha callback (returning from login)
