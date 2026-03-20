@@ -130,6 +130,26 @@ body{background:var(--bg);color:var(--t);font-family:var(--f2);font-size:12px;ov
 @keyframes sp{to{transform:rotate(360deg)}}
 .oc-summary-card{text-align:center}.oc-big{font-family:var(--f1);font-size:28px;font-weight:800}
 .strike-item{display:flex;justify-content:space-between;padding:8px 12px;background:var(--bg);border-radius:5px;margin-bottom:5px;font-size:12px}
+/* Dashboard 4 — Trade Options */
+.vol-bar-wrap{display:flex;align-items:center;gap:4px;margin-bottom:3px;font-size:11px;height:28px}
+.vol-bar{height:22px;border-radius:3px;min-width:2px;transition:width .5s}
+.vol-bar.ce{background:linear-gradient(90deg,transparent,var(--g));float:right}
+.vol-bar.pe{background:linear-gradient(270deg,transparent,var(--r))}
+.suggest-card{background:var(--bg);border-radius:10px;padding:16px;border:1px solid var(--bd);position:relative;overflow:hidden}
+.suggest-card.call{border-top:3px solid var(--g)}
+.suggest-card.put{border-top:3px solid var(--r)}
+.suggest-card .strike-num{font-family:var(--f1);font-size:32px;font-weight:800}
+.suggest-card .reason{font-size:11px;color:var(--m);line-height:1.8;margin-top:8px}
+.suggest-card .conf{font-size:13px;font-weight:700;margin-top:6px}
+.astro-row{display:flex;gap:8px;align-items:center;margin-bottom:6px}
+.astro-row input,.astro-row select{background:var(--s2);border:1px solid var(--bd);color:var(--t);padding:6px 10px;border-radius:5px;font-family:var(--f2);font-size:11px;flex:1}
+.astro-level{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--bg);border-radius:6px;margin-bottom:4px;font-size:12px;border-left:3px solid var(--p)}
+.astro-level.near{border-left-color:var(--r);background:rgba(255,51,85,.05);animation:oi-flash .8s ease infinite}
+.reversal-box{background:var(--bg);border-radius:8px;padding:12px;margin-bottom:8px;border-left:3px solid var(--y);font-size:12px;line-height:1.8}
+.reversal-box.bullish{border-left-color:var(--g);background:rgba(0,230,118,.04)}
+.reversal-box.bearish{border-left-color:var(--r);background:rgba(255,51,85,.04)}
+.oi-build-bar{display:flex;align-items:center;gap:6px;font-size:11px;margin-bottom:4px}
+.oi-build-bar .bar{height:16px;border-radius:3px;transition:width .5s}
 @media(max-width:1200px){.g21,.g12,.g2{grid-template-columns:1fr}.g3,.g4{grid-template-columns:1fr 1fr}.sh-cards{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:768px){.g3,.g4{grid-template-columns:1fr}.sh-cards{grid-template-columns:repeat(2,1fr)}.hdr{flex-wrap:wrap}.nav{margin-left:0}}
 /* PULSE */
@@ -228,6 +248,7 @@ body{background:var(--bg);color:var(--t);font-family:var(--f2);font-size:12px;ov
     <button class="nav-btn on" onclick="showPage('equity',this)">📈 EQUITY</button>
     <button class="nav-btn" onclick="showPage('fno',this)">⚡ F&O</button>
     <button class="nav-btn" onclick="showPage('pulse',this)">🌍 PULSE</button>
+    <button class="nav-btn" onclick="showPage('options',this)">🎯 TRADE OPTIONS</button>
   </div>
   <div class="hdr-r">
     <span><span class="dot dg" id="conn-dot"></span><span id="conn-txt">CONNECTING</span></span>
@@ -722,6 +743,104 @@ body{background:var(--bg);color:var(--t);font-family:var(--f2);font-size:12px;ov
 
 </div>
 
+<!-- ═══════════ TRADE OPTIONS PAGE ═══════════ -->
+<div class="page" id="page-options">
+
+  <!-- INDEX SELECTOR -->
+  <div class="pn" style="margin-bottom:12px">
+    <div class="ph">
+      <div class="pt">🎯 TRADE OPTIONS — SMART STRIKE FINDER</div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <button class="btn btn-a" id="to-nifty" onclick="loadTradeOptions('NIFTY',this)" style="padding:5px 12px;font-size:10px">NIFTY</button>
+        <button class="btn btn-b" id="to-banknifty" onclick="loadTradeOptions('BANKNIFTY',this)" style="padding:5px 12px;font-size:10px">BANKNIFTY</button>
+        <button class="btn btn-b" id="to-finnifty" onclick="loadTradeOptions('FINNIFTY',this)" style="padding:5px 12px;font-size:10px">FINNIFTY</button>
+        <button class="btn btn-b" id="to-midcpnifty" onclick="loadTradeOptions('MIDCPNIFTY',this)" style="padding:5px 12px;font-size:10px">MIDCPNIFTY</button>
+        <span style="font-size:10px;color:var(--m)" id="to-status">Select index to load</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ROW 1: AUTO STRIKE SUGGESTIONS -->
+  <div class="g2">
+    <div class="pn">
+      <div class="ph"><div class="pt">📞 BUY CALL SUGGESTION</div><span class="badge bg">AUTO</span></div>
+      <div id="to-call-suggest"><div style="color:var(--m);text-align:center;padding:20px">Load index to get suggestions</div></div>
+    </div>
+    <div class="pn">
+      <div class="ph"><div class="pt">📍 BUY PUT SUGGESTION</div><span class="badge br">AUTO</span></div>
+      <div id="to-put-suggest"><div style="color:var(--m);text-align:center;padding:20px">Load index to get suggestions</div></div>
+    </div>
+  </div>
+
+  <!-- ROW 2: INSTITUTIONAL REVERSAL DETECTION -->
+  <div class="pn" style="margin-bottom:12px">
+    <div class="ph"><div class="pt">🔮 SMART MONEY REVERSAL DETECTION</div><span class="badge br">AI ENGINE</span></div>
+    <div id="to-reversal-detect"><div style="color:var(--m);text-align:center;padding:20px">Analyzing institutional activity...</div></div>
+  </div>
+
+  <!-- ROW 3: BUYERS vs SELLERS DEEP + VOLUME PROFILE -->
+  <div class="g2">
+    <div class="pn">
+      <div class="ph"><div class="pt">⚔ BUYERS vs SELLERS — DEEP ANALYSIS</div><span class="badge ba">LIVE</span></div>
+      <div id="to-buyers-sellers" style="max-height:400px;overflow-y:auto"><div style="color:var(--m);text-align:center;padding:20px">Loading...</div></div>
+    </div>
+    <div class="pn">
+      <div class="ph"><div class="pt">📊 VOLUME PROFILE — ATM ±6 STRIKES</div><span class="badge by">VISUAL</span></div>
+      <div id="to-vol-profile"><div style="color:var(--m);text-align:center;padding:20px">Loading...</div></div>
+    </div>
+  </div>
+
+  <!-- ROW 4: OLD vs NEW OI + MONTHLY CANDLE -->
+  <div class="g2">
+    <div class="pn">
+      <div class="ph"><div class="pt">🏗 OLD OI vs NEW OI BUILDING</div><span class="badge bp">ANALYSIS</span></div>
+      <div id="to-oi-building"><div style="color:var(--m);text-align:center;padding:20px">Loading...</div></div>
+    </div>
+    <div class="pn">
+      <div class="ph"><div class="pt">📅 MONTHLY CANDLE LEVELS</div><span class="badge ba">INDEX</span></div>
+      <div id="to-monthly-candle"><div style="color:var(--m);text-align:center;padding:20px">Loading...</div></div>
+    </div>
+  </div>
+
+  <!-- ROW 5: ASTRO PLANET LEVELS -->
+  <div class="g2">
+    <div class="pn">
+      <div class="ph"><div class="pt">🪐 ASTRO PLANET LEVELS — MANUAL INPUT</div><span class="badge bp">GANN + ASTRO</span></div>
+      <div id="to-astro-input">
+        <div class="astro-row">
+          <select id="astro-planet">
+            <option>☉ Sun</option><option>☽ Moon</option><option>☿ Mercury</option><option>♀ Venus</option>
+            <option>♂ Mars</option><option>♃ Jupiter</option><option>♄ Saturn</option><option>♅ Rahu</option>
+            <option>♆ Ketu</option><option>⚷ Chiron</option><option>Custom</option>
+          </select>
+          <input type="number" id="astro-degree" placeholder="Degree (0-360)" step="0.01">
+          <input type="number" id="astro-price" placeholder="Price Level">
+          <button class="btn btn-a" onclick="addAstroLevel()" style="padding:5px 12px;font-size:10px;white-space:nowrap">+ ADD</button>
+        </div>
+        <div style="font-size:9px;color:var(--m);margin:6px 0 10px">Enter planetary degrees from your Vedic/Western chart. System auto-calculates Gann Square of 9, harmonic levels & proximity alerts.</div>
+        <div id="astro-levels-list"></div>
+      </div>
+    </div>
+    <div class="pn">
+      <div class="ph"><div class="pt">🔮 ASTRO CHART ANALYSIS</div><span class="badge br">FUTURISTIC</span></div>
+      <div id="to-astro-chart"><div style="color:var(--m);text-align:center;padding:20px">Add planet levels to see analysis</div></div>
+    </div>
+  </div>
+
+  <!-- ROW 6: GANN AUTO LEVELS + ASTRO SUGGESTIONS -->
+  <div class="g2">
+    <div class="pn">
+      <div class="ph"><div class="pt">📐 GANN SQUARE OF 9 — AUTO LEVELS</div><span class="badge by">CALCULATED</span></div>
+      <div id="to-gann-levels"><div style="color:var(--m);text-align:center;padding:20px">Load index to calculate Gann levels</div></div>
+    </div>
+    <div class="pn">
+      <div class="ph"><div class="pt">🌟 ASTRO TRADE SUGGESTIONS</div><span class="badge bg">SIGNALS</span></div>
+      <div id="to-astro-suggest"><div style="color:var(--m);text-align:center;padding:20px">Add planet levels & load index for signals</div></div>
+    </div>
+  </div>
+
+</div>
+
 </div><!-- /main -->
 
 <script>
@@ -733,6 +852,7 @@ const APP = {
   chart: null, candleSeries: null, volSeries: null, sma20Series: null, sma50Series: null,
   fno: { index: 'NIFTY', expiry: '', data: null, processed: null, prevOI: {}, oiHistory: [], alertStrikes: {} },
   indices: {}, news: [], globalNews: [], lastNewsTitle: '', lastNewsTitles: new Set(), newsFilter: 'all', bankData: [],
+  options: { index: 'NIFTY', astroLevels: [], monthlyCandle: null },
   timers: {}, connected: false, chartRange: '3mo', chartInterval: '1d',
   // Zerodha Auth
   kite: { api_key: '', api_secret: '', access_token: '', active: false }
@@ -1839,6 +1959,9 @@ function processAndRenderOC(raw) {
 
   // Seller vs Buyer Dominance
   renderSellerBuyer(allData, spot);
+
+  // Trade Options tab
+  if (APP.page === 'options') renderAllTradeOptions();
 }
 
 function calculateMaxPain(data) {
@@ -2227,6 +2350,675 @@ function renderSellerBuyer(data, spot) {
   $('sb-who').style.color = whoColor;
 }
 
+// ═══════════════════════════════════════════════════════
+// DASHBOARD 4 — TRADE OPTIONS
+// ═══════════════════════════════════════════════════════
+
+async function loadTradeOptions(index, btn) {
+  // Update button styles
+  ['to-nifty','to-banknifty','to-finnifty','to-midcpnifty'].forEach(id => {
+    const el = $(id); if (el) { el.className = 'btn btn-b'; el.style.padding = '5px 12px'; el.style.fontSize = '10px'; }
+  });
+  if (btn) { btn.className = 'btn btn-a'; btn.style.padding = '5px 12px'; btn.style.fontSize = '10px'; }
+  APP.options.index = index;
+  $('to-status').innerHTML = '<span class="spin"></span> Loading ' + index + '...';
+
+  // If F&O already loaded for this index, reuse
+  if (APP.fno.data && APP.fno.index === index) {
+    renderAllTradeOptions();
+    $('to-status').textContent = index + ' loaded ✓';
+    return;
+  }
+  // Otherwise load F&O data
+  APP.fno.index = index;
+  await loadFnO(index, $('fno-' + index.toLowerCase()));
+  renderAllTradeOptions();
+  $('to-status').textContent = index + ' loaded ✓';
+}
+
+function renderAllTradeOptions() {
+  const raw = APP.fno.data;
+  if (!raw?.records?.data) return;
+  const expiry = APP.fno.expiry;
+  const allData = raw.records.data.filter(r => r.expiryDate === expiry);
+  if (!allData.length) return;
+
+  const spot = allData[0]?.CE?.underlyingValue || allData[0]?.PE?.underlyingValue || 0;
+  const strikes = allData.map(r => r.strikePrice).sort((a,b) => a-b);
+  const atm = strikes.reduce((best, s) => Math.abs(s-spot) < Math.abs(best-spot) ? s : best, strikes[0]);
+  const maxPain = calculateMaxPain(allData);
+  const totCallOI = raw.filtered?.CE?.totOI || 0;
+  const totPutOI = raw.filtered?.PE?.totOI || 0;
+  const pcr = totCallOI > 0 ? (totPutOI / totCallOI) : 1;
+
+  let maxCallOI = { strike: 0, oi: 0 }, maxPutOI = { strike: 0, oi: 0 };
+  allData.forEach(r => {
+    if (r.CE?.openInterest > maxCallOI.oi) maxCallOI = { strike: r.strikePrice, oi: r.CE.openInterest };
+    if (r.PE?.openInterest > maxPutOI.oi) maxPutOI = { strike: r.strikePrice, oi: r.PE.openInterest };
+  });
+
+  renderStrikeSuggestions(allData, spot, atm, maxPain, pcr, maxCallOI, maxPutOI);
+  renderReversalDetection(allData, spot, atm);
+  renderBuyersSellersDeep(allData, spot);
+  renderVolumeProfile(allData, atm, spot);
+  renderOldVsNewOI(allData, spot);
+  renderMonthlyLevels(spot);
+  renderAstroLevels(spot);
+  renderGannLevels(spot);
+  renderAstroSuggestions(spot);
+}
+
+// ═══ FEATURE 1: AUTO STRIKE SUGGESTIONS ═══
+function renderStrikeSuggestions(data, spot, atm, maxPain, pcr, maxCallOI, maxPutOI) {
+  // Analyze for CALL suggestion
+  let callStrike = 0, callScore = 0, callReasons = [];
+  // Analyze for PUT suggestion
+  let putStrike = 0, putScore = 0, putReasons = [];
+
+  // Sort by proximity to ATM
+  const sorted = data.sort((a,b) => Math.abs(a.strikePrice - spot) - Math.abs(b.strikePrice - spot));
+
+  // Bullish factors → BUY CALL
+  if (pcr > 1.1) { callScore += 3; callReasons.push(`PCR ${pcr.toFixed(2)} > 1.1 — Put sellers supporting market`); }
+  if (spot > maxPain) { callScore += 2; callReasons.push(`Spot ${spot} above Max Pain ${maxPain} — Bullish bias`); }
+  if (maxPutOI.oi > maxCallOI.oi * 1.2) { callScore += 2; callReasons.push(`Put OI wall at ${maxPutOI.strike} is massive — Strong support`); }
+
+  // Find best call strike: OTM call with high put OI support below
+  const otmCalls = data.filter(r => r.strikePrice > spot && r.strikePrice <= spot * 1.03).sort((a,b) => a.strikePrice - b.strikePrice);
+  if (otmCalls.length) {
+    // Pick strike with: low IV, decent volume, not too far OTM
+    let best = otmCalls[0];
+    otmCalls.forEach(r => {
+      const score = (r.CE?.totalTradedVolume || 0) * 0.5 - (r.CE?.impliedVolatility || 50) * 100 - Math.abs(r.strikePrice - spot) * 0.3;
+      const bScore = (best.CE?.totalTradedVolume || 0) * 0.5 - (best.CE?.impliedVolatility || 50) * 100 - Math.abs(best.strikePrice - spot) * 0.3;
+      if (score > bScore) best = r;
+    });
+    callStrike = best.strikePrice;
+    if (best.CE?.changeinOpenInterest < 0) { callScore += 2; callReasons.push(`Short covering at ${callStrike} — Sellers exiting`); }
+    if (best.CE?.impliedVolatility < 20) callReasons.push(`Low IV ${(best.CE?.impliedVolatility||0).toFixed(1)}% — Cheap premium`);
+  }
+
+  // Bearish factors → BUY PUT
+  if (pcr < 0.9) { putScore += 3; putReasons.push(`PCR ${pcr.toFixed(2)} < 0.9 — Call sellers dominating`); }
+  if (spot < maxPain) { putScore += 2; putReasons.push(`Spot ${spot} below Max Pain ${maxPain} — Bearish pressure`); }
+  if (maxCallOI.oi > maxPutOI.oi * 1.2) { putScore += 2; putReasons.push(`Call OI wall at ${maxCallOI.strike} is massive — Strong resistance`); }
+
+  const otmPuts = data.filter(r => r.strikePrice < spot && r.strikePrice >= spot * 0.97).sort((a,b) => b.strikePrice - a.strikePrice);
+  if (otmPuts.length) {
+    let best = otmPuts[0];
+    otmPuts.forEach(r => {
+      const score = (r.PE?.totalTradedVolume || 0) * 0.5 - (r.PE?.impliedVolatility || 50) * 100 - Math.abs(r.strikePrice - spot) * 0.3;
+      const bScore = (best.PE?.totalTradedVolume || 0) * 0.5 - (best.PE?.impliedVolatility || 50) * 100 - Math.abs(best.strikePrice - spot) * 0.3;
+      if (score > bScore) best = r;
+    });
+    putStrike = best.strikePrice;
+    if (best.PE?.changeinOpenInterest < 0) { putScore += 2; putReasons.push(`Short covering at ${putStrike} PE — Sellers exiting`); }
+    if (best.PE?.impliedVolatility < 20) putReasons.push(`Low IV ${(best.PE?.impliedVolatility||0).toFixed(1)}% — Cheap premium`);
+  }
+
+  // OI change momentum
+  let callOIChg = 0, putOIChg = 0;
+  data.forEach(r => { callOIChg += r.CE?.changeinOpenInterest || 0; putOIChg += r.PE?.changeinOpenInterest || 0; });
+  if (putOIChg > callOIChg * 1.3) { callScore += 2; callReasons.push('Put writers adding aggressively — Bullish signal'); }
+  if (callOIChg > putOIChg * 1.3) { putScore += 2; putReasons.push('Call writers adding aggressively — Bearish signal'); }
+
+  const callConf = Math.min(95, Math.max(30, callScore * 10 + 25));
+  const putConf = Math.min(95, Math.max(30, putScore * 10 + 25));
+  const callCE = data.find(r => r.strikePrice === callStrike)?.CE || {};
+  const putPE = data.find(r => r.strikePrice === putStrike)?.PE || {};
+
+  $('to-call-suggest').innerHTML = `
+    <div class="suggest-card call">
+      <div style="font-size:11px;color:var(--g);letter-spacing:1px;font-weight:700;margin-bottom:6px">📞 BUY CALL</div>
+      <div class="strike-num" style="color:var(--g)">${callStrike || 'N/A'} CE</div>
+      <div style="font-size:12px;margin-top:4px">LTP: <b>₹${(callCE.lastPrice||0).toFixed(2)}</b> · IV: <b>${(callCE.impliedVolatility||0).toFixed(1)}%</b> · OI: <b>${fmtL(callCE.openInterest||0)}</b></div>
+      <div class="conf" style="color:${callConf > 60 ? 'var(--g)' : 'var(--y)'}">Confidence: ${callConf}%</div>
+      <div class="reason">${callReasons.length ? callReasons.map(r => '• ' + r).join('<br>') : '• No strong bullish signals detected'}</div>
+      <div style="margin-top:10px;font-size:11px;padding:8px;background:rgba(0,230,118,.06);border-radius:6px">
+        <b>Target:</b> ₹${((callCE.lastPrice||0) * 1.5).toFixed(2)} · <b>SL:</b> ₹${((callCE.lastPrice||0) * 0.6).toFixed(2)}
+      </div>
+    </div>`;
+
+  $('to-put-suggest').innerHTML = `
+    <div class="suggest-card put">
+      <div style="font-size:11px;color:var(--r);letter-spacing:1px;font-weight:700;margin-bottom:6px">📍 BUY PUT</div>
+      <div class="strike-num" style="color:var(--r)">${putStrike || 'N/A'} PE</div>
+      <div style="font-size:12px;margin-top:4px">LTP: <b>₹${(putPE.lastPrice||0).toFixed(2)}</b> · IV: <b>${(putPE.impliedVolatility||0).toFixed(1)}%</b> · OI: <b>${fmtL(putPE.openInterest||0)}</b></div>
+      <div class="conf" style="color:${putConf > 60 ? 'var(--r)' : 'var(--y)'}">Confidence: ${putConf}%</div>
+      <div class="reason">${putReasons.length ? putReasons.map(r => '• ' + r).join('<br>') : '• No strong bearish signals detected'}</div>
+      <div style="margin-top:10px;font-size:11px;padding:8px;background:rgba(255,51,85,.06);border-radius:6px">
+        <b>Target:</b> ₹${((putPE.lastPrice||0) * 1.5).toFixed(2)} · <b>SL:</b> ₹${((putPE.lastPrice||0) * 0.6).toFixed(2)}
+      </div>
+    </div>`;
+}
+
+// ═══ FEATURE 2: INSTITUTIONAL REVERSAL DETECTION ═══
+function renderReversalDetection(data, spot, atm) {
+  const prev = APP.fno.prevOI;
+  const signals = [];
+
+  // Pattern 1: OI unwinding at multiple near-ATM strikes = Position squaring before reversal
+  let unwindCount = 0, buildCount = 0;
+  const nearATM = data.filter(r => Math.abs(r.strikePrice - atm) <= (atm * 0.02));
+  nearATM.forEach(r => {
+    if ((r.CE?.changeinOpenInterest || 0) < -5000) unwindCount++;
+    if ((r.PE?.changeinOpenInterest || 0) < -5000) unwindCount++;
+    if ((r.CE?.changeinOpenInterest || 0) > 10000) buildCount++;
+    if ((r.PE?.changeinOpenInterest || 0) > 10000) buildCount++;
+  });
+
+  if (unwindCount >= 3) {
+    signals.push({
+      type: 'bearish',
+      title: '⚠️ MASSIVE OI UNWINDING NEAR ATM',
+      desc: `${unwindCount} strikes showing OI exit near ATM ${atm}. Institutions squaring off positions — possible reversal incoming.`,
+      action: 'Consider buying PUT if breakdown confirmed below ' + (atm - (atm * 0.005)).toFixed(0)
+    });
+  }
+
+  // Pattern 2: Call OI building + Put OI building simultaneously at same strike = Straddle sellers
+  data.forEach(r => {
+    const ceChg = r.CE?.changeinOpenInterest || 0;
+    const peChg = r.PE?.changeinOpenInterest || 0;
+    if (ceChg > 20000 && peChg > 20000 && Math.abs(r.strikePrice - spot) < spot * 0.01) {
+      signals.push({
+        type: 'neutral',
+        title: `🔒 STRADDLE SELLING AT ${r.strikePrice}`,
+        desc: `Both CE (+${fmtL(ceChg)}) and PE (+${fmtL(peChg)}) OI building — Institutions selling straddle. Expecting range-bound market around ${r.strikePrice}.`,
+        action: `Range: ${r.strikePrice - 200} to ${r.strikePrice + 200}. Avoid buying options — theta decay favors sellers.`
+      });
+    }
+  });
+
+  // Pattern 3: Heavy call selling BUT put OI decreasing = Hidden bullish (trap for retail bears)
+  let heavyCallSell = 0, putUnwind = 0;
+  data.forEach(r => {
+    if ((r.CE?.changeinOpenInterest || 0) > 15000 && (r.CE?.change || 0) < 0) heavyCallSell++;
+    if ((r.PE?.changeinOpenInterest || 0) < -10000) putUnwind++;
+  });
+  if (heavyCallSell >= 2 && putUnwind >= 2) {
+    signals.push({
+      type: 'bullish',
+      title: '🐂 HIDDEN BULLISH — CALL WRITING + PUT UNWINDING',
+      desc: `${heavyCallSell} strikes with heavy call writing while ${putUnwind} strikes showing put unwinding. Smart money may be writing calls at higher levels while exiting puts — they KNOW buying is coming.`,
+      action: 'Consider buying CALL near ATM. The call writing is to trap retail bears.'
+    });
+  }
+
+  // Pattern 4: Heavy put selling BUT call OI decreasing = Hidden bearish
+  let heavyPutSell = 0, callUnwind = 0;
+  data.forEach(r => {
+    if ((r.PE?.changeinOpenInterest || 0) > 15000 && (r.PE?.change || 0) < 0) heavyPutSell++;
+    if ((r.CE?.changeinOpenInterest || 0) < -10000) callUnwind++;
+  });
+  if (heavyPutSell >= 2 && callUnwind >= 2) {
+    signals.push({
+      type: 'bearish',
+      title: '🐻 HIDDEN BEARISH — PUT WRITING + CALL UNWINDING',
+      desc: `${heavyPutSell} strikes with heavy put writing while ${callUnwind} strikes showing call unwinding. Smart money writing puts to collect premium while exiting calls — selling is expected.`,
+      action: 'Consider buying PUT near ATM. The put writing is to trap retail bulls.'
+    });
+  }
+
+  // Pattern 5: Volume spike without OI change = Day-trading disguise (institutions hiding direction)
+  let phantomVol = 0;
+  data.forEach(r => {
+    if (r.CE?.totalTradedVolume > 50000 && Math.abs(r.CE?.changeinOpenInterest || 0) < 5000) phantomVol++;
+    if (r.PE?.totalTradedVolume > 50000 && Math.abs(r.PE?.changeinOpenInterest || 0) < 5000) phantomVol++;
+  });
+  if (phantomVol >= 3) {
+    signals.push({
+      type: 'neutral',
+      title: '👻 PHANTOM VOLUME — HIGH VOLUME, LOW OI CHANGE',
+      desc: `${phantomVol} strikes showing massive volume but minimal OI change. Institutions are day-trading/scalping to hide their real direction. A big move is brewing.`,
+      action: 'Wait for OI to confirm direction. Buy straddle if expecting breakout.'
+    });
+  }
+
+  // Pattern 6: IV expansion without price movement = Big move expected
+  const avgIV = data.reduce((s,r) => s + (r.CE?.impliedVolatility || 0) + (r.PE?.impliedVolatility || 0), 0) / (data.length * 2 || 1);
+  if (avgIV > 18) {
+    signals.push({
+      type: 'neutral',
+      title: '📈 ELEVATED IV — BIG MOVE EXPECTED',
+      desc: `Average IV at ${avgIV.toFixed(1)}% (elevated). Market makers pricing in a significant move. Direction unclear from IV alone.`,
+      action: `If IV > 20%: Buy options only if you have a strong directional view. Otherwise, sell straddle at ATM ${atm}.`
+    });
+  }
+
+  const el = $('to-reversal-detect');
+  if (!signals.length) {
+    el.innerHTML = '<div style="text-align:center;padding:20px"><div style="font-size:16px;color:var(--g);font-weight:700">✅ NO REVERSAL SIGNALS</div><div style="font-size:12px;color:var(--m);margin-top:6px">No institutional manipulation patterns detected. Market flowing naturally.</div></div>';
+    return;
+  }
+  el.innerHTML = signals.map(s => `
+    <div class="reversal-box ${s.type}">
+      <div style="font-weight:700;font-size:14px;margin-bottom:6px">${s.title}</div>
+      <div style="color:var(--m)">${s.desc}</div>
+      <div style="margin-top:8px;padding:8px;background:rgba(0,204,255,.06);border-radius:5px;color:var(--a);font-weight:600">💡 ${s.action}</div>
+    </div>
+  `).join('');
+}
+
+// ═══ FEATURE 3: BUYERS vs SELLERS DEEP ═══
+function renderBuyersSellersDeep(data, spot) {
+  const strikes = [];
+  data.forEach(r => {
+    const ceChg = r.CE?.changeinOpenInterest || 0;
+    const peChg = r.PE?.changeinOpenInterest || 0;
+    const cePriceChg = r.CE?.change || 0;
+    const pePriceChg = r.PE?.change || 0;
+    let ceType = '—', peType = '—', ceColor = 'var(--m)', peColor = 'var(--m)';
+
+    if (ceChg > 0 && cePriceChg <= 0) { ceType = 'CALL WRITING'; ceColor = 'var(--r)'; }
+    else if (ceChg > 0 && cePriceChg > 0) { ceType = 'LONG BUILD'; ceColor = 'var(--g)'; }
+    else if (ceChg < 0 && cePriceChg > 0) { ceType = 'SHORT COVER'; ceColor = 'var(--y)'; }
+    else if (ceChg < 0 && cePriceChg <= 0) { ceType = 'LONG UNWIND'; ceColor = 'var(--m)'; }
+
+    if (peChg > 0 && pePriceChg <= 0) { peType = 'PUT WRITING'; peColor = 'var(--g)'; }
+    else if (peChg > 0 && pePriceChg > 0) { peType = 'LONG BUILD'; peColor = 'var(--r)'; }
+    else if (peChg < 0 && pePriceChg > 0) { peType = 'LONG UNWIND'; peColor = 'var(--m)'; }
+    else if (peChg < 0 && pePriceChg <= 0) { peType = 'SHORT COVER'; peColor = 'var(--y)'; }
+
+    if (Math.abs(ceChg) > 1000 || Math.abs(peChg) > 1000) {
+      strikes.push({ strike: r.strikePrice, ceChg, peChg, ceType, peType, ceColor, peColor, dist: Math.abs(r.strikePrice - spot) });
+    }
+  });
+
+  strikes.sort((a,b) => a.dist - b.dist);
+  $('to-buyers-sellers').innerHTML = `
+    <div style="display:grid;grid-template-columns:2fr 1fr 2fr 1fr 2fr;gap:4px;font-size:10px;padding:4px 8px;color:var(--m);font-weight:700;margin-bottom:6px">
+      <span>CE ACTION</span><span style="text-align:center">CE OI Δ</span><span style="text-align:center">STRIKE</span><span style="text-align:center">PE OI Δ</span><span style="text-align:right">PE ACTION</span>
+    </div>
+    ${strikes.slice(0, 20).map(s => `
+      <div style="display:grid;grid-template-columns:2fr 1fr 2fr 1fr 2fr;gap:4px;font-size:11px;padding:6px 8px;background:var(--bg);border-radius:4px;margin-bottom:2px;align-items:center">
+        <span style="color:${s.ceColor};font-weight:600">${s.ceType}</span>
+        <span style="text-align:center;color:${s.ceChg>0?'var(--g)':'var(--r)'}">${s.ceChg>0?'+':''}${fmtL(s.ceChg)}</span>
+        <span style="text-align:center;font-weight:700;color:var(--y)">${s.strike}</span>
+        <span style="text-align:center;color:${s.peChg>0?'var(--r)':'var(--g)'}">${s.peChg>0?'+':''}${fmtL(s.peChg)}</span>
+        <span style="text-align:right;color:${s.peColor};font-weight:600">${s.peType}</span>
+      </div>
+    `).join('')}
+  `;
+}
+
+// ═══ FEATURE 4: VOLUME PROFILE ═══
+function renderVolumeProfile(data, atm, spot) {
+  const sorted = data.sort((a,b) => a.strikePrice - b.strikePrice);
+  const atmIdx = sorted.findIndex(r => r.strikePrice === atm);
+  const start = Math.max(0, atmIdx - 6);
+  const end = Math.min(sorted.length, atmIdx + 7);
+  const visible = sorted.slice(start, end);
+
+  const maxVol = Math.max(...visible.map(r => Math.max(r.CE?.totalTradedVolume||0, r.PE?.totalTradedVolume||0)), 1);
+
+  $('to-vol-profile').innerHTML = visible.map(r => {
+    const ceVol = r.CE?.totalTradedVolume || 0;
+    const peVol = r.PE?.totalTradedVolume || 0;
+    const ceW = (ceVol / maxVol * 100).toFixed(0);
+    const peW = (peVol / maxVol * 100).toFixed(0);
+    const isATM = r.strikePrice === atm;
+    return `<div class="vol-bar-wrap" style="${isATM ? 'background:rgba(255,193,7,.08);border-radius:4px' : ''}">
+      <div style="width:40%;text-align:right;display:flex;align-items:center;justify-content:flex-end;gap:4px">
+        <span style="font-size:10px;color:var(--g)">${fmtL(ceVol)}</span>
+        <div style="width:${ceW}%;max-width:90%" class="vol-bar ce"></div>
+      </div>
+      <div style="width:20%;text-align:center;font-weight:700;color:${isATM ? 'var(--y)' : 'var(--t)'};font-size:${isATM ? '13px' : '11px'}">${r.strikePrice}${isATM ? ' ●' : ''}</div>
+      <div style="width:40%;display:flex;align-items:center;gap:4px">
+        <div style="width:${peW}%;max-width:90%" class="vol-bar pe"></div>
+        <span style="font-size:10px;color:var(--r)">${fmtL(peVol)}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ═══ FEATURE 5: OLD vs NEW OI ═══
+function renderOldVsNewOI(data, spot) {
+  const oldOI = [], newOI = [];
+  data.forEach(r => {
+    const ceOI = r.CE?.openInterest || 0;
+    const ceChg = r.CE?.changeinOpenInterest || 0;
+    const peOI = r.PE?.openInterest || 0;
+    const peChg = r.PE?.changeinOpenInterest || 0;
+    const ceNewPct = ceOI > 0 ? (ceChg / ceOI * 100) : 0;
+    const peNewPct = peOI > 0 ? (peChg / peOI * 100) : 0;
+
+    // Old OI: High absolute OI, low change %
+    if (ceOI > 50000 && Math.abs(ceNewPct) < 5) oldOI.push({ strike: r.strikePrice, type: 'CE', oi: ceOI, chg: ceChg, pct: ceNewPct });
+    if (peOI > 50000 && Math.abs(peNewPct) < 5) oldOI.push({ strike: r.strikePrice, type: 'PE', oi: peOI, chg: peChg, pct: peNewPct });
+
+    // New OI: High change %
+    if (Math.abs(ceChg) > 5000 && Math.abs(ceNewPct) > 15) newOI.push({ strike: r.strikePrice, type: 'CE', oi: ceOI, chg: ceChg, pct: ceNewPct });
+    if (Math.abs(peChg) > 5000 && Math.abs(peNewPct) > 15) newOI.push({ strike: r.strikePrice, type: 'PE', oi: peOI, chg: peChg, pct: peNewPct });
+  });
+
+  oldOI.sort((a,b) => b.oi - a.oi);
+  newOI.sort((a,b) => Math.abs(b.pct) - Math.abs(a.pct));
+
+  $('to-oi-building').innerHTML = `
+    <div style="font-size:12px;color:var(--a);font-weight:700;margin-bottom:8px">🏛 OLD POSITIONS (Built in prior sessions)</div>
+    <div style="font-size:10px;color:var(--m);margin-bottom:6px">High OI, minimal change today — Institutional positions from previous days</div>
+    ${oldOI.slice(0,8).map(o => `
+      <div class="oi-build-bar">
+        <span style="width:60px;font-weight:600;color:var(--y)">${o.strike}</span>
+        <span style="width:30px;color:${o.type==='CE'?'var(--g)':'var(--r)'}">${o.type}</span>
+        <div style="flex:1;background:var(--s2);border-radius:3px;overflow:hidden"><div class="bar" style="width:${Math.min(100, o.oi / (oldOI[0]?.oi||1) * 100)}%;background:${o.type==='CE'?'rgba(0,230,118,.3)':'rgba(255,51,85,.3)'}">&nbsp;</div></div>
+        <span style="width:60px;text-align:right">${fmtL(o.oi)}</span>
+      </div>
+    `).join('') || '<div style="color:var(--m);padding:8px">No significant old positions found</div>'}
+
+    <div style="font-size:12px;color:var(--p);font-weight:700;margin:16px 0 8px">🆕 NEW OI BUILDING (Fresh positions today)</div>
+    <div style="font-size:10px;color:var(--m);margin-bottom:6px">High change % — Smart money building new positions NOW</div>
+    ${newOI.slice(0,8).map(o => `
+      <div class="oi-build-bar">
+        <span style="width:60px;font-weight:600;color:var(--y)">${o.strike}</span>
+        <span style="width:30px;color:${o.type==='CE'?'var(--g)':'var(--r)'}">${o.type}</span>
+        <div style="flex:1;background:var(--s2);border-radius:3px;overflow:hidden"><div class="bar" style="width:${Math.min(100, Math.abs(o.pct) / (Math.abs(newOI[0]?.pct)||1) * 100)}%;background:${o.chg>0?'rgba(0,204,255,.4)':'rgba(255,193,7,.4)'}">&nbsp;</div></div>
+        <span style="width:80px;text-align:right;color:${o.chg>0?'var(--g)':'var(--r)'}">+${Math.abs(o.pct).toFixed(0)}% (${fmtL(o.chg)})</span>
+      </div>
+    `).join('') || '<div style="color:var(--m);padding:8px">No significant new OI building found</div>'}
+  `;
+}
+
+// ═══ FEATURE 6: MONTHLY CANDLE LEVELS ═══
+async function renderMonthlyLevels(spot) {
+  // Get monthly candle from Yahoo/Kite
+  try {
+    const sym = APP.fno.index || 'NIFTY';
+    let high = 0, low = 99999, open = 0;
+
+    // Try Kite first
+    if (APP.kite.active) {
+      const hist = await kiteApi('history', { instrument: 'NSE:' + (sym === 'NIFTY' ? 'NIFTY 50' : sym === 'BANKNIFTY' ? 'NIFTY BANK' : sym), interval: 'day', range: '1mo' });
+      if (hist?.candles?.length) {
+        open = hist.candles[0][1];
+        hist.candles.forEach(c => { if (c[2] > high) high = c[2]; if (c[3] < low) low = c[3]; });
+      }
+    }
+
+    // Fallback to Yahoo
+    if (!high || high === 0) {
+      const yahooSym = sym === 'NIFTY' ? 'NIFTY 50' : sym === 'BANKNIFTY' ? 'NIFTY BANK' : sym;
+      const data = await nseApi('history', { symbol: yahooSym, range: '1mo', interval: '1d' });
+      if (data?.chart?.result?.[0]) {
+        const q = data.chart.result[0].indicators?.quote?.[0] || {};
+        (q.high || []).forEach(h => { if (h && h > high) high = h; });
+        (q.low || []).forEach(l => { if (l && l < low) low = l; });
+        open = (q.open || [])[0] || 0;
+      }
+    }
+
+    if (!high || high === 0) {
+      $('to-monthly-candle').innerHTML = '<div style="color:var(--m);text-align:center;padding:15px">Monthly data not available</div>';
+      return;
+    }
+
+    const mid = (high + low) / 2;
+    const range = high - low;
+    const spotPct = range > 0 ? ((spot - low) / range * 100).toFixed(0) : 50;
+    const nearHigh = spot > high * 0.99;
+    const nearLow = spot < low * 1.01;
+    const near50 = Math.abs(spot - mid) < range * 0.03;
+
+    $('to-monthly-candle').innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:12px">
+        <div style="text-align:center;background:var(--bg);border-radius:6px;padding:10px;border-top:3px solid var(--r)">
+          <div style="font-size:10px;color:var(--m)">MONTH HIGH</div>
+          <div style="font-family:var(--f1);font-size:18px;font-weight:700;color:var(--r)">${high.toLocaleString('en-IN')}</div>
+        </div>
+        <div style="text-align:center;background:var(--bg);border-radius:6px;padding:10px;border-top:3px solid var(--g)">
+          <div style="font-size:10px;color:var(--m)">MONTH LOW</div>
+          <div style="font-family:var(--f1);font-size:18px;font-weight:700;color:var(--g)">${low.toLocaleString('en-IN')}</div>
+        </div>
+        <div style="text-align:center;background:var(--bg);border-radius:6px;padding:10px;border-top:3px solid var(--y)">
+          <div style="font-size:10px;color:var(--m)">50% LEVEL</div>
+          <div style="font-family:var(--f1);font-size:18px;font-weight:700;color:var(--y)">${mid.toLocaleString('en-IN', {maximumFractionDigits:0})}</div>
+        </div>
+        <div style="text-align:center;background:var(--bg);border-radius:6px;padding:10px;border-top:3px solid var(--a)">
+          <div style="font-size:10px;color:var(--m)">RANGE</div>
+          <div style="font-family:var(--f1);font-size:18px;font-weight:700;color:var(--a)">${range.toFixed(0)} pts</div>
+        </div>
+      </div>
+      <div style="background:var(--bg);border-radius:8px;padding:12px">
+        <div style="position:relative;height:24px;background:linear-gradient(90deg,var(--g),var(--y),var(--r));border-radius:12px;margin:8px 0">
+          <div style="position:absolute;top:-20px;left:${spotPct}%;transform:translateX(-50%);font-size:10px;font-weight:700;color:var(--a)">SPOT ▼</div>
+          <div style="position:absolute;top:2px;left:${spotPct}%;transform:translateX(-50%);width:20px;height:20px;background:var(--a);border-radius:50%;border:2px solid white"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--m)">
+          <span>${low.toFixed(0)}</span><span>${mid.toFixed(0)}</span><span>${high.toFixed(0)}</span>
+        </div>
+        <div style="text-align:center;margin-top:8px;font-size:12px;font-weight:600;color:${nearHigh?'var(--r)':nearLow?'var(--g)':near50?'var(--y)':'var(--a)'}">
+          ${nearHigh ? '⚠️ NEAR MONTH HIGH — Resistance zone' : nearLow ? '⚠️ NEAR MONTH LOW — Support zone' : near50 ? '⚖️ AT 50% LEVEL — Decision point' : `Spot at ${spotPct}% of monthly range`}
+        </div>
+      </div>`;
+  } catch(e) {
+    $('to-monthly-candle').innerHTML = '<div style="color:var(--m);text-align:center;padding:15px">Error loading monthly data</div>';
+  }
+}
+
+// ═══ FEATURE 7: ASTRO PLANET LEVELS ═══
+function addAstroLevel() {
+  const planet = $('astro-planet').value;
+  const degree = parseFloat($('astro-degree').value) || 0;
+  const price = parseFloat($('astro-price').value) || 0;
+  if (!price) { toast('Enter a price level', 'err'); return; }
+
+  APP.options.astroLevels.push({ planet, degree, price, ts: Date.now() });
+  localStorage.setItem('khabar_astro', JSON.stringify(APP.options.astroLevels));
+  $('astro-degree').value = '';
+  $('astro-price').value = '';
+  toast(`${planet} level added at ${price}`, 'ok');
+
+  const spot = APP.fno.spotForGreeks || 0;
+  renderAstroLevels(spot);
+  renderGannLevels(spot);
+  renderAstroSuggestions(spot);
+}
+
+function removeAstroLevel(idx) {
+  APP.options.astroLevels.splice(idx, 1);
+  localStorage.setItem('khabar_astro', JSON.stringify(APP.options.astroLevels));
+  const spot = APP.fno.spotForGreeks || 0;
+  renderAstroLevels(spot);
+  renderAstroSuggestions(spot);
+}
+
+function renderAstroLevels(spot) {
+  const levels = APP.options.astroLevels;
+  const list = $('astro-levels-list');
+  if (!list) return;
+  if (!levels.length) {
+    list.innerHTML = '<div style="color:var(--m);text-align:center;padding:10px;font-size:11px">No planet levels added yet. Add levels from your astro chart above.</div>';
+    return;
+  }
+
+  list.innerHTML = levels.sort((a,b) => a.price - b.price).map((l, i) => {
+    const dist = spot ? ((l.price - spot) / spot * 100).toFixed(2) : '?';
+    const near = spot ? Math.abs(l.price - spot) < spot * 0.005 : false;
+    const above = l.price > spot;
+    return `<div class="astro-level ${near ? 'near' : ''}">
+      <div>
+        <b style="color:var(--p)">${l.planet}</b>
+        <span style="font-size:10px;color:var(--m)">${l.degree ? l.degree + '°' : ''}</span>
+      </div>
+      <div style="font-family:var(--f1);font-weight:700;color:${near ? 'var(--r)' : 'var(--t)'}">${l.price.toLocaleString('en-IN')}</div>
+      <div style="font-size:10px;color:${above ? 'var(--r)' : 'var(--g)'}">
+        ${above ? '▲ Resistance' : '▼ Support'} · ${dist}%
+        ${near ? '<span style="color:var(--r);font-weight:700"> ⚠ NEAR!</span>' : ''}
+      </div>
+      <span style="cursor:pointer;color:var(--m);font-size:14px" onclick="removeAstroLevel(${i})">✕</span>
+    </div>`;
+  }).join('');
+}
+
+// ═══ FEATURE 8: GANN SQUARE OF 9 ═══
+function renderGannLevels(spot) {
+  if (!spot) { $('to-gann-levels').innerHTML = '<div style="color:var(--m);text-align:center;padding:15px">Load index first</div>'; return; }
+
+  const sqrtSpot = Math.sqrt(spot);
+  const levels = [];
+
+  // Gann angles from spot: 45°, 90°, 120°, 180°, 225°, 270°, 315°, 360°
+  const angles = [45, 90, 120, 135, 180, 225, 270, 315, 360];
+  angles.forEach(deg => {
+    const up = Math.pow(sqrtSpot + deg / 180, 2);
+    const down = Math.pow(Math.max(0, sqrtSpot - deg / 180), 2);
+    levels.push({ angle: deg, up: Math.round(up), down: Math.round(down) });
+  });
+
+  // Add astro-derived Gann levels
+  const astroGann = [];
+  APP.options.astroLevels.forEach(l => {
+    if (l.degree) {
+      const sq9up = Math.pow(Math.sqrt(l.price) + l.degree / 180, 2);
+      const sq9down = Math.pow(Math.max(0, Math.sqrt(l.price) - l.degree / 180), 2);
+      astroGann.push({ planet: l.planet, degree: l.degree, up: Math.round(sq9up), down: Math.round(sq9down), base: l.price });
+    }
+  });
+
+  $('to-gann-levels').innerHTML = `
+    <div style="font-size:12px;color:var(--a);font-weight:700;margin-bottom:8px">📐 FROM SPOT ${spot.toLocaleString('en-IN')}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;font-size:10px;padding:4px 8px;color:var(--m);font-weight:700;margin-bottom:4px">
+      <span>ANGLE</span><span style="text-align:center;color:var(--r)">RESISTANCE ▲</span><span style="text-align:right;color:var(--g)">SUPPORT ▼</span>
+    </div>
+    ${levels.map(l => {
+      const nearUp = Math.abs(l.up - spot) < spot * 0.003;
+      const nearDown = Math.abs(l.down - spot) < spot * 0.003;
+      return `<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;font-size:12px;padding:5px 8px;background:var(--bg);border-radius:4px;margin-bottom:2px">
+        <span style="color:var(--y);font-weight:600">${l.angle}°</span>
+        <span style="text-align:center;color:var(--r);${nearUp?'font-weight:700;text-decoration:underline':''}">${l.up.toLocaleString('en-IN')}${nearUp?' ⚠':''}</span>
+        <span style="text-align:right;color:var(--g);${nearDown?'font-weight:700;text-decoration:underline':''}">${l.down.toLocaleString('en-IN')}${nearDown?' ⚠':''}</span>
+      </div>`;
+    }).join('')}
+    ${astroGann.length ? `
+      <div style="font-size:12px;color:var(--p);font-weight:700;margin:12px 0 8px">🪐 ASTRO-GANN DERIVED LEVELS</div>
+      ${astroGann.map(l => `
+        <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:4px;font-size:11px;padding:5px 8px;background:var(--bg);border-radius:4px;margin-bottom:2px;border-left:2px solid var(--p)">
+          <span style="color:var(--p)">${l.planet} ${l.degree}° (base: ${l.base})</span>
+          <span style="text-align:center;color:var(--r)">${l.up.toLocaleString('en-IN')}</span>
+          <span style="text-align:right;color:var(--g)">${l.down.toLocaleString('en-IN')}</span>
+        </div>
+      `).join('')}
+    ` : ''}
+  `;
+}
+
+// ═══ FEATURE 9: ASTRO TRADE SUGGESTIONS ═══
+function renderAstroSuggestions(spot) {
+  const levels = APP.options.astroLevels;
+  if (!levels.length || !spot) {
+    $('to-astro-chart').innerHTML = '<div style="color:var(--m);text-align:center;padding:20px">Add planet levels from your astro chart to get trade suggestions</div>';
+    $('to-astro-suggest').innerHTML = '<div style="color:var(--m);text-align:center;padding:20px">Add planet levels & load index for signals</div>';
+    return;
+  }
+
+  // Sort by distance from spot
+  const sorted = levels.map(l => ({ ...l, dist: Math.abs(l.price - spot), above: l.price > spot, pctDist: ((l.price - spot) / spot * 100) })).sort((a,b) => a.dist - b.dist);
+
+  // Nearest support and resistance
+  const supports = sorted.filter(l => !l.above);
+  const resistances = sorted.filter(l => l.above);
+  const nearestSup = supports[0];
+  const nearestRes = resistances[0];
+
+  // Confluence zones (multiple planets near same level)
+  const clusters = [];
+  for (let i = 0; i < sorted.length; i++) {
+    for (let j = i + 1; j < sorted.length; j++) {
+      if (Math.abs(sorted[i].price - sorted[j].price) < spot * 0.003) {
+        clusters.push({ levels: [sorted[i], sorted[j]], avgPrice: (sorted[i].price + sorted[j].price) / 2 });
+      }
+    }
+  }
+
+  // Generate signals
+  const signals = [];
+  const nearLevel = sorted[0];
+  if (nearLevel && nearLevel.dist < spot * 0.005) {
+    signals.push({
+      icon: '⚠️',
+      text: `Spot is AT ${nearLevel.planet} level (${nearLevel.price}) — Expect reversal or breakout!`,
+      color: 'var(--r)'
+    });
+  }
+  if (nearestSup) {
+    signals.push({
+      icon: nearestSup.dist < spot * 0.01 ? '🟢' : '💚',
+      text: `Nearest astro support: ${nearestSup.planet} at ${nearestSup.price} (${nearestSup.pctDist.toFixed(2)}%). ${nearestSup.dist < spot * 0.01 ? 'VERY CLOSE — may bounce!' : 'Watch for approach.'}`,
+      color: 'var(--g)'
+    });
+  }
+  if (nearestRes) {
+    signals.push({
+      icon: nearestRes.dist < spot * 0.01 ? '🔴' : '❤️',
+      text: `Nearest astro resistance: ${nearestRes.planet} at ${nearestRes.price} (+${nearestRes.pctDist.toFixed(2)}%). ${nearestRes.dist < spot * 0.01 ? 'VERY CLOSE — may face rejection!' : 'Watch for approach.'}`,
+      color: 'var(--r)'
+    });
+  }
+  clusters.forEach(c => {
+    signals.push({
+      icon: '🌟',
+      text: `CONFLUENCE ZONE at ~${c.avgPrice.toFixed(0)} — ${c.levels.map(l => l.planet).join(' + ')} converge here. HIGH PROBABILITY reversal zone.`,
+      color: 'var(--p)'
+    });
+  });
+
+  // Trade suggestion
+  let tradeSuggestion = '';
+  if (nearestSup && nearestRes) {
+    const range = nearestRes.price - nearestSup.price;
+    const midpoint = (nearestRes.price + nearestSup.price) / 2;
+    if (spot > midpoint) {
+      tradeSuggestion = `<div style="background:rgba(0,230,118,.06);border:1px solid rgba(0,230,118,.2);border-radius:8px;padding:12px;margin-top:10px">
+        <div style="font-weight:700;color:var(--g);margin-bottom:4px">📞 ASTRO SAYS: BUY CALL</div>
+        <div style="font-size:11px;color:var(--m);line-height:1.8">Spot above midpoint of astro range. ${nearestSup.planet} support at ${nearestSup.price} holding. Target: ${nearestRes.price}. SL: ${nearestSup.price}.</div>
+      </div>`;
+    } else {
+      tradeSuggestion = `<div style="background:rgba(255,51,85,.06);border:1px solid rgba(255,51,85,.2);border-radius:8px;padding:12px;margin-top:10px">
+        <div style="font-weight:700;color:var(--r);margin-bottom:4px">📍 ASTRO SAYS: BUY PUT</div>
+        <div style="font-size:11px;color:var(--m);line-height:1.8">Spot below midpoint of astro range. ${nearestRes.planet} resistance at ${nearestRes.price} capping. Target: ${nearestSup.price}. SL: ${nearestRes.price}.</div>
+      </div>`;
+    }
+  }
+
+  // Render Astro Chart Analysis
+  $('to-astro-chart').innerHTML = `
+    <div style="text-align:center;margin-bottom:10px">
+      <div style="font-size:14px;font-weight:700;color:var(--p)">🪐 PLANET POSITION MAP</div>
+      <div style="font-size:10px;color:var(--m)">Spot: ${spot.toLocaleString('en-IN')} · ${levels.length} planetary levels active</div>
+    </div>
+    <div style="position:relative;background:var(--bg);border-radius:8px;padding:12px;min-height:${levels.length * 28 + 40}px">
+      ${sorted.map(l => {
+        const pos = Math.max(5, Math.min(95, 50 + l.pctDist * 10));
+        return `<div style="display:flex;align-items:center;margin-bottom:4px">
+          <span style="width:80px;font-size:10px;color:var(--p)">${l.planet}</span>
+          <div style="flex:1;position:relative;height:20px">
+            <div style="position:absolute;left:50%;top:0;bottom:0;width:2px;background:var(--a);opacity:.3"></div>
+            <div style="position:absolute;left:${pos}%;top:2px;transform:translateX(-50%);background:${l.above?'var(--r)':'var(--g)'};border-radius:50%;width:16px;height:16px;display:flex;align-items:center;justify-content:center;font-size:8px;color:white;font-weight:700">${l.above?'R':'S'}</div>
+          </div>
+          <span style="width:70px;text-align:right;font-size:10px;color:${l.above?'var(--r)':'var(--g)'}">${l.price.toLocaleString('en-IN')}</span>
+        </div>`;
+      }).join('')}
+      <div style="text-align:center;font-size:9px;color:var(--a);margin-top:6px">← Support | SPOT (center) | Resistance →</div>
+    </div>
+    ${tradeSuggestion}
+  `;
+
+  // Render Trade Signals
+  $('to-astro-suggest').innerHTML = `
+    ${signals.map(s => `
+      <div style="display:flex;gap:8px;align-items:start;padding:8px 10px;background:var(--bg);border-radius:6px;margin-bottom:4px;font-size:12px;line-height:1.6">
+        <span style="font-size:16px">${s.icon}</span>
+        <span style="color:${s.color}">${s.text}</span>
+      </div>
+    `).join('')}
+    <div style="margin-top:10px;padding:10px;background:rgba(179,136,255,.06);border:1px solid rgba(179,136,255,.2);border-radius:8px;font-size:10px;color:var(--m);line-height:1.8">
+      <b style="color:var(--p)">💡 PRO TIP:</b> Astro levels work best when confluent with OI data. Check if Max Pain, Max OI, or Gann levels align with your planet levels for highest probability trades.
+      ${clusters.length ? `<br><b style="color:var(--p)">🌟 ${clusters.length} confluence zone(s) detected!</b> These are the strongest reversal points.` : ''}
+    </div>
+  `;
+}
+
 function renderTrendSignal(data, spot, pcr, maxPain, maxCallOI, maxPutOI) {
   let bullScore = 0, bearScore = 0;
 
@@ -2588,6 +3380,12 @@ function showPage(page, btn) {
   APP.page = page;
   if (page === 'pulse' && Date.now() - PULSE.lastRefresh > 15000) refreshPulse();
   if (page === 'fno' && !APP.fno.data) loadFnO('NIFTY', $('fno-nifty'));
+  if (page === 'options') {
+    // Load astro from localStorage
+    try { APP.options.astroLevels = JSON.parse(localStorage.getItem('khabar_astro') || '[]'); } catch(e) {}
+    if (APP.fno.data) renderAllTradeOptions();
+    else loadTradeOptions('NIFTY', $('to-nifty'));
+  }
 }
 
 // ═══════════════════════════════════════════════════════
@@ -3261,7 +4059,7 @@ function startRefresh() {
 
   // Option chain every 15s
   APP.timers.oc = setInterval(() => {
-    if (document.visibilityState === 'visible' && APP.page === 'fno' && APP.fno.data) {
+    if (document.visibilityState === 'visible' && (APP.page === 'fno' || APP.page === 'options') && APP.fno.data) {
       refreshFnO();
     }
   }, 15000);
