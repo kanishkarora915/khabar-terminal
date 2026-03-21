@@ -37,10 +37,10 @@ function parseRSS(xml, source, category = 'market') {
   let m;
   while ((m = re.exec(xml)) !== null) {
     const it = m[1];
-    const title = (it.match(/<title><!\[CDATA\[(.*?)\]\]>/) || it.match(/<title>(.*?)<\/title>/) || ['', ''])[1];
-    const link = (it.match(/<link>(.*?)<\/link>/) || it.match(/<link[^>]*href="(.*?)"/) || ['', ''])[1];
-    const pubDate = (it.match(/<pubDate>(.*?)<\/pubDate>/) || it.match(/<dc:date>(.*?)<\/dc:date>/) || ['', ''])[1];
-    const desc = (it.match(/<description><!\[CDATA\[([\s\S]*?)\]\]>/) || it.match(/<description>([\s\S]*?)<\/description>/) || ['', ''])[1];
+    const title = (it.match(/<title><!\[CDATA\[(.*?)\]\]>/) || it.match(/<title>([^<]+)<\/title>/) || ['', ''])[1];
+    const link = (it.match(/<link><!\[CDATA\[(.*?)\]\]>/) || it.match(/<link>([^<]+)<\/link>/) || it.match(/<link[^>]*href="(.*?)"/) || ['', ''])[1];
+    const pubDate = (it.match(/<pubDate><!\[CDATA\[(.*?)\]\]>/) || it.match(/<pubDate>([^<]+)<\/pubDate>/) || it.match(/<dc:date>([^<]+)<\/dc:date>/) || ['', ''])[1];
+    const desc = (it.match(/<description><!\[CDATA\[([\s\S]*?)\]\]>/) || it.match(/<description>([^<]*(?:<[^>]*>[^<]*)*?)<\/description>/) || ['', ''])[1];
     if (title && title.length > 10) {
       const clean = desc.replace(/<[^>]*>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").trim().slice(0, 250);
 
@@ -80,27 +80,20 @@ exports.handler = async (event) => {
 
   try {
     const feeds = [
-      // === INDIA MARKET NEWS (fastest sources) ===
-      { url: 'https://www.moneycontrol.com/rss/MCtopnews.xml', source: 'MoneyControl', cat: 'market' },
-      { url: 'https://www.moneycontrol.com/rss/marketreports.xml', source: 'MC Markets', cat: 'market' },
-      { url: 'https://www.moneycontrol.com/rss/latestnews.xml', source: 'MC Latest', cat: 'market' },
+      // === INDIA MARKET NEWS (fastest, verified working) ===
       { url: 'https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms', source: 'ET Markets', cat: 'market' },
       { url: 'https://economictimes.indiatimes.com/rssfeedstopnews.cms', source: 'ET Top', cat: 'market' },
-      { url: 'https://www.livemint.com/rss/markets', source: 'LiveMint', cat: 'market' },
-      { url: 'https://www.livemint.com/rss/money', source: 'Mint Money', cat: 'market' },
-      { url: 'https://www.business-standard.com/rss/markets-106.rss', source: 'BS Markets', cat: 'market' },
-      { url: 'https://www.ndtv.com/rss/profit/latest', source: 'NDTV Profit', cat: 'market' },
-
-      // === GLOBAL / CNBC / REUTERS ===
       { url: 'https://www.cnbctv18.com/commonfeeds/v1/cne/rss/market.xml', source: 'CNBC-TV18', cat: 'market' },
       { url: 'https://www.cnbctv18.com/commonfeeds/v1/cne/rss/economy.xml', source: 'CNBC Economy', cat: 'market' },
-      { url: 'https://feeds.feedburner.com/ABORSI_EN_Business', source: 'Reuters Biz', cat: 'global' },
+      { url: 'https://www.livemint.com/rss/markets', source: 'LiveMint', cat: 'market' },
+      { url: 'https://www.livemint.com/rss/money', source: 'Mint Money', cat: 'market' },
+      { url: 'https://www.moneycontrol.com/rss/marketreports.xml', source: 'MC Markets', cat: 'market' },
+      { url: 'https://www.moneycontrol.com/rss/latestnews.xml', source: 'MC Latest', cat: 'market' },
 
-      // === GEOPOLITICAL / WORLD NEWS ===
-      { url: 'https://economictimes.indiatimes.com/news/international/world-news/rssfeeds/56903411.cms', source: 'ET World', cat: 'geo' },
-      { url: 'https://www.ndtv.com/rss/world-news', source: 'NDTV World', cat: 'geo' },
-      { url: 'https://www.moneycontrol.com/rss/internationalNews.xml', source: 'MC World', cat: 'geo' },
-      { url: 'https://economictimes.indiatimes.com/news/defence/rssfeeds/68826498.cms', source: 'ET Defence', cat: 'geo' },
+      // === GEOPOLITICAL / WORLD NEWS (verified working) ===
+      { url: 'https://timesofindia.indiatimes.com/rssfeeds/296589292.cms', source: 'TOI World', cat: 'geo' },
+      { url: 'https://feeds.feedburner.com/ndtvnews-world-news', source: 'NDTV World', cat: 'geo' },
+      { url: 'https://www.hindustantimes.com/feeds/rss/world-news/rssfeed.xml', source: 'HT World', cat: 'geo' },
       { url: 'https://www.livemint.com/rss/politics', source: 'Mint Politics', cat: 'geo' },
     ];
 
