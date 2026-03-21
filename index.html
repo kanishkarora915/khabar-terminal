@@ -840,25 +840,44 @@ body{background:var(--bg);color:var(--t);font-family:var(--f1);font-size:14px;ov
     </div>
   </div>
 
-  <!-- ROW 7: MARKET-MOVING NEWS FEED -->
+  <!-- ROW 7: GEOPOLITICAL UPDATES -->
+  <div class="pn" style="margin-bottom:14px">
+    <div class="ph"><div class="pt">🌍 GEOPOLITICAL UPDATES & MARKET RISKS</div><span class="badge br" id="geo-count">LIVE</span></div>
+    <div class="news-filter-bar">
+      <button class="news-filter-btn active" onclick="filterGeoNews('all',this)">ALL</button>
+      <button class="news-filter-btn" onclick="filterGeoNews('war',this)">⚔ WAR/CONFLICT</button>
+      <button class="news-filter-btn" onclick="filterGeoNews('trade',this)">📦 TRADE/TARIFF</button>
+      <button class="news-filter-btn" onclick="filterGeoNews('sanctions',this)">🚫 SANCTIONS</button>
+      <button class="news-filter-btn" onclick="filterGeoNews('diplomacy',this)">🤝 DIPLOMACY</button>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div id="geo-news-feed" style="max-height:400px;overflow-y:auto"><div style="color:var(--m);text-align:center;padding:20px"><span class="spin"></span> Loading geopolitical updates...</div></div>
+      <div>
+        <div style="font-size:12px;color:var(--a);font-weight:700;letter-spacing:1px;margin-bottom:10px">MARKET IMPACT SIGNALS</div>
+        <div id="geo-impact" style="font-size:13px;color:var(--m)">Analyzing geopolitical risks...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ROW 8: MARKET-MOVING NEWS FEED -->
   <div class="g2">
     <div class="pn">
-      <div class="ph"><div class="pt">📰 MARKET-MOVING NEWS — INDIA</div><span class="badge br">LIVE</span></div>
+      <div class="ph"><div class="pt">📰 MARKET NEWS — INDIA</div><span class="badge br">LIVE</span></div>
       <div class="news-filter-bar">
         <button class="news-filter-btn active" onclick="filterPulseNews('all',this,'pulse-india-news')">ALL</button>
-        <button class="news-filter-btn" onclick="filterPulseNews('breaking',this,'pulse-india-news')">🔴 HIGH IMPACT</button>
-        <button class="news-filter-btn" onclick="filterPulseNews('rbi',this,'pulse-india-news')">🏛 RBI/SEBI</button>
-        <button class="news-filter-btn" onclick="filterPulseNews('results',this,'pulse-india-news')">📊 RESULTS</button>
+        <button class="news-filter-btn" onclick="filterPulseNews('breaking',this,'pulse-india-news')">HIGH IMPACT</button>
+        <button class="news-filter-btn" onclick="filterPulseNews('rbi',this,'pulse-india-news')">RBI/SEBI</button>
+        <button class="news-filter-btn" onclick="filterPulseNews('results',this,'pulse-india-news')">RESULTS</button>
       </div>
       <div id="pulse-india-news" style="max-height:400px;overflow-y:auto"><div style="color:var(--m);text-align:center;padding:20px"><span class="spin"></span> Loading...</div></div>
     </div>
     <div class="pn">
-      <div class="ph"><div class="pt">🌐 GLOBAL MARKET NEWS</div><span class="badge ba">FINNHUB</span></div>
+      <div class="ph"><div class="pt">🌐 GLOBAL MARKET NEWS</div><span class="badge ba">LIVE</span></div>
       <div class="news-filter-bar">
         <button class="news-filter-btn active" onclick="filterPulseNews('all',this,'pulse-global-news')">ALL</button>
-        <button class="news-filter-btn" onclick="filterPulseNews('fed',this,'pulse-global-news')">🏛 FED/ECB</button>
-        <button class="news-filter-btn" onclick="filterPulseNews('earnings',this,'pulse-global-news')">💰 EARNINGS</button>
-        <button class="news-filter-btn" onclick="filterPulseNews('crypto',this,'pulse-global-news')">₿ CRYPTO</button>
+        <button class="news-filter-btn" onclick="filterPulseNews('fed',this,'pulse-global-news')">FED/ECB</button>
+        <button class="news-filter-btn" onclick="filterPulseNews('earnings',this,'pulse-global-news')">EARNINGS</button>
+        <button class="news-filter-btn" onclick="filterPulseNews('crypto',this,'pulse-global-news')">CRYPTO</button>
       </div>
       <div id="pulse-global-news" style="max-height:400px;overflow-y:auto"><div style="color:var(--m);text-align:center;padding:20px"><span class="spin"></span> Loading...</div></div>
     </div>
@@ -4345,10 +4364,130 @@ async function renderEconomicCalendar() {
     '<div style="color:var(--m);text-align:center;padding:15px">No economic events data available</div>';
 }
 
+// ═══════════════════════════════════════════════════════
+// GEOPOLITICAL UPDATES SECTION
+// ═══════════════════════════════════════════════════════
+function renderGeopolitical() {
+  const geoNews = APP.news.filter(n => n.isGeo || n.category === 'geo' ||
+    /war|geopolit|nuclear|missile|attack|invasion|ceasefire|NATO|military|troops|border|conflict|sanction|embargo|diplomacy|summit|tension|strike|drone|weapon|defence|defense|terror|Kashmir|Pakistan|China|Russia|Ukraine|Israel|Gaza|Iran|North Korea|Taiwan|trade war|tariff|Trump|Modi|Xi|Putin/i.test(n.title || '')
+  );
+
+  const feedEl = $('geo-news-feed');
+  const impactEl = $('geo-impact');
+  const countEl = $('geo-count');
+  if (!feedEl) return;
+
+  if (countEl) countEl.textContent = geoNews.length + ' UPDATES';
+
+  if (!geoNews.length) {
+    feedEl.innerHTML = '<div style="color:var(--m);text-align:center;padding:20px">No geopolitical updates at this time</div>';
+    if (impactEl) impactEl.innerHTML = '<div style="color:var(--g);font-weight:700;padding:8px 12px;background:rgba(0,230,118,.06);border-radius:8px;border-left:3px solid var(--g)">No major geopolitical risks detected. Markets stable.</div>';
+    return;
+  }
+
+  feedEl.innerHTML = geoNews.slice(0, 20).map(n => {
+    const time = new Date(n.time);
+    const ago = Math.round((Date.now() - time) / 60000);
+    const agoStr = ago < 1 ? 'JUST NOW' : ago < 60 ? `${ago}m ago` : `${Math.round(ago/60)}h ago`;
+    const isVeryNew = ago < 10;
+    return `<div class="news-item ${n.highImpact ? 'news-hi' : (isVeryNew ? 'news-new' : '')}" ${n.link ? `onclick="window.open('${n.link}','_blank')"` : ''} style="cursor:pointer">
+      <div style="display:flex;align-items:center;gap:5px">
+        <span class="news-src news-src-global">${n.source}</span>
+        <span style="font-size:10px;color:${isVeryNew ? 'var(--a);font-weight:700' : 'var(--m)'}">${agoStr}</span>
+        ${n.highImpact ? '<span class="news-badge-new">HIGH IMPACT</span>' : ''}
+      </div>
+      <div style="margin-top:5px;font-size:13px;line-height:1.6;${n.highImpact ? 'font-weight:700;color:var(--t)' : 'color:var(--m)'}">${n.title}</div>
+      ${n.desc ? `<div style="font-size:11px;color:var(--m);margin-top:3px;opacity:.6">${n.desc.slice(0, 150)}...</div>` : ''}
+    </div>`;
+  }).join('');
+
+  // Generate market impact signals
+  if (impactEl) {
+    let signals = [];
+    const titles = geoNews.map(n => n.title.toLowerCase()).join(' ');
+
+    if (/war|invasion|attack|missile|nuclear|bomb/i.test(titles)) {
+      signals.push({ text: 'ACTIVE CONFLICT — Safe havens (Gold, Bonds) may rise, equities at risk', color: 'var(--r)', icon: '⚠' });
+    }
+    if (/tariff|trade war|import duty|export ban|embargo/i.test(titles)) {
+      signals.push({ text: 'TRADE TENSIONS — Watch impacted sectors, supply chain disruption likely', color: 'var(--y)', icon: '📦' });
+    }
+    if (/sanction|ban|restrict|blacklist/i.test(titles)) {
+      signals.push({ text: 'SANCTIONS — Affected companies/sectors may face selloff', color: 'var(--r)', icon: '🚫' });
+    }
+    if (/ceasefire|peace|de-escalat|diplomatic|agreement|treaty/i.test(titles)) {
+      signals.push({ text: 'DE-ESCALATION — Risk-on sentiment, positive for equities', color: 'var(--g)', icon: '🤝' });
+    }
+    if (/oil|opec|crude|energy crisis|fuel/i.test(titles)) {
+      signals.push({ text: 'ENERGY RISK — Oil prices may spike, watch inflation impact on RBI', color: 'var(--y)', icon: '🛢' });
+    }
+    if (/china|taiwan|south china sea/i.test(titles)) {
+      signals.push({ text: 'CHINA TENSIONS — Watch FII flows, Asian markets correlation', color: 'var(--y)', icon: '🇨🇳' });
+    }
+    if (/pakistan|kashmir|loc|indo-pak|border|india.*attack/i.test(titles)) {
+      signals.push({ text: 'INDIA-PAK TENSIONS — Defence stocks may rally, market may gap down', color: 'var(--r)', icon: '🇮🇳' });
+    }
+    if (/fed|rate|inflation|recession|unemployment/i.test(titles)) {
+      signals.push({ text: 'MACRO RISK — FII outflows possible if US rates stay high', color: 'var(--y)', icon: '🏛' });
+    }
+
+    if (signals.length === 0) {
+      signals.push({ text: 'Geopolitical activity detected — monitor for market impact', color: 'var(--a)', icon: '📡' });
+    }
+
+    impactEl.innerHTML = signals.map(s =>
+      `<div style="padding:10px 14px;background:rgba(${s.color === 'var(--r)' ? '255,61,90' : s.color === 'var(--g)' ? '0,230,118' : s.color === 'var(--y)' ? '255,202,40' : '0,212,255'},.06);border-radius:8px;border-left:3px solid ${s.color};margin-bottom:8px;font-size:13px;line-height:1.7">
+        <span style="font-size:14px">${s.icon}</span> <span style="color:${s.color};font-weight:700">${s.text}</span>
+      </div>`
+    ).join('') + `<div style="font-size:11px;color:var(--m);margin-top:12px;padding:10px;background:var(--bg);border-radius:8px;line-height:1.8">
+      <b style="color:var(--a)">How geopolitics affects markets:</b><br>
+      War/Conflict → Gold up, Oil up, Equities down<br>
+      Sanctions → Sector-specific selloff<br>
+      Trade wars → Currency volatility, supply chain stocks hit<br>
+      De-escalation → Risk-on rally, FII buying
+    </div>`;
+  }
+}
+
+function filterGeoNews(filter, btn) {
+  if (btn) {
+    btn.parentElement.querySelectorAll('.news-filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  }
+  const allGeo = APP.news.filter(n => n.isGeo || n.category === 'geo' ||
+    /war|geopolit|nuclear|missile|attack|invasion|ceasefire|NATO|military|troops|border|conflict|sanction|embargo|diplomacy|summit|tension|tariff|trade war|Trump|Modi|Xi|Putin/i.test(n.title || '')
+  );
+
+  let filtered = allGeo;
+  if (filter === 'war') filtered = allGeo.filter(n => /war|conflict|attack|missile|bomb|invasion|military|troops|strike|drone|weapon|terror|blast/i.test(n.title));
+  else if (filter === 'trade') filtered = allGeo.filter(n => /trade|tariff|import|export|duty|commerce|WTO|supply chain/i.test(n.title));
+  else if (filter === 'sanctions') filtered = allGeo.filter(n => /sanction|embargo|ban|restrict|blacklist|penalty/i.test(n.title));
+  else if (filter === 'diplomacy') filtered = allGeo.filter(n => /diplomacy|peace|ceasefire|summit|treaty|agreement|negotiat|de-escalat|bilateral|G7|G20|UN|BRICS/i.test(n.title));
+
+  const feedEl = $('geo-news-feed');
+  if (!feedEl) return;
+  if (!filtered.length) {
+    feedEl.innerHTML = '<div style="color:var(--m);text-align:center;padding:20px">No updates in this category</div>';
+    return;
+  }
+  feedEl.innerHTML = filtered.slice(0, 20).map(n => {
+    const ago = Math.round((Date.now() - new Date(n.time)) / 60000);
+    const agoStr = ago < 1 ? 'JUST NOW' : ago < 60 ? `${ago}m ago` : `${Math.round(ago/60)}h ago`;
+    return `<div class="news-item ${n.highImpact ? 'news-hi' : ''}" ${n.link ? `onclick="window.open('${n.link}','_blank')"` : ''} style="cursor:pointer">
+      <div style="display:flex;align-items:center;gap:5px">
+        <span class="news-src news-src-global">${n.source}</span>
+        <span style="font-size:10px;color:var(--m)">${agoStr}</span>
+        ${n.highImpact ? '<span class="news-badge-new">HIGH IMPACT</span>' : ''}
+      </div>
+      <div style="margin-top:5px;font-size:13px;line-height:1.6;${n.highImpact ? 'font-weight:700;color:var(--t)' : 'color:var(--m)'}">${n.title}</div>
+    </div>`;
+  }).join('');
+}
+
 async function refreshPulse() {
   if (APP.page !== 'pulse') return;
 
-  // Fetch global data from Yahoo via batch
+  // Fetch global data via Finnhub
   await fetchGlobalData();
 
   // Render all sections
@@ -4365,6 +4504,7 @@ async function refreshPulse() {
   renderSectorRotation();
   renderIPOCalendar();
   renderEconomicCalendar();
+  renderGeopolitical();
 
   PULSE.lastRefresh = Date.now();
 }
