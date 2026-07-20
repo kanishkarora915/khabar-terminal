@@ -86,7 +86,10 @@ function bsPrice(S, K, T, r, sigma, isCall) {
 // Returns IV as a percentage (e.g. 14.2), or 0 if unsolvable
 function impliedVol(price, S, K, T, isCall, r = 0.065) {
   if (!price || !S || !K || T <= 0) return 0;
-  const intrinsic = Math.max(0, isCall ? S - K : K - S);
+  // A European put's lower bound is K*e^(-rT) - S, not K - S. Using the
+  // undiscounted floor rejected virtually every in-the-money put, which
+  // stripped greeks off the entire put wing.
+  const intrinsic = Math.max(0, isCall ? S - K * Math.exp(-r * T) : K * Math.exp(-r * T) - S);
   if (price <= intrinsic) return 0;          // no time value → can't solve
   let lo = 0.001, hi = 5.0;                   // 0.1% to 500% vol
   if (bsPrice(S, K, T, r, hi, isCall) < price) return 0;  // price above max model value
@@ -125,12 +128,14 @@ function bsGreeks(S, K, T, sigmaPct, isCall, r = 0.065) {
     ? (-S * pdf * sigma / (2 * sqT)) - r * K * disc * normCDF(d2)
     : (-S * pdf * sigma / (2 * sqT)) + r * K * disc * normCDF(-d2);
 
-  const r4 = v => (isFinite(v) ? Math.round(v * 10000) / 10000 : null);
+  const rnd = (v, dp) => (isFinite(v) ? Math.round(v * 10 ** dp) / 10 ** dp : null);
   return {
-    delta: r4(delta),
-    gamma: r4(gamma),
-    theta: r4(thetaYear / 365),
-    vega:  r4(vega)
+    delta: rnd(delta, 4),
+    // gamma is ~1e-4 for index options and gets multiplied by 7-digit OI in the
+    // GEX calc, so 4dp quantised neighbouring strikes into the same bucket
+    gamma: rnd(gamma, 8),
+    theta: rnd(thetaYear / 365, 4),
+    vega:  rnd(vega, 4)
   };
 }
 

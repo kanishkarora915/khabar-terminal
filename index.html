@@ -3086,9 +3086,10 @@ const EquityUniverse = {
     this.error = null;
     try {
       const r = await kiteApi('nse-equities');
-      if (r?.equities?.length) {
-        this.list = r.equities;
-        try { localStorage.setItem(this.KEY, JSON.stringify({ equities: r.equities, ts: Date.now() })); } catch(e) {}
+      const eqList = r?.data?.equities || r?.equities;
+      if (eqList?.length) {
+        this.list = eqList;
+        try { localStorage.setItem(this.KEY, JSON.stringify({ equities: eqList, ts: Date.now() })); } catch(e) {}
       } else {
         this.error = r?.error || 'empty instrument list';
       }
@@ -8655,7 +8656,10 @@ const PANELS = [
       if (pcrDelta > 0.02) bull += 25; else if (pcrDelta < -0.02) bear += 25;
       if (atmDeltaPE > 0)  bull += 20;  // PE writing = support
       if (atmDeltaCE > 0)  bear += 20;  // CE writing = resistance
-      if (atmDeltaPE < -atmDeltaPE * 0.1 && atmDeltaCE < 0) bull += 15; // CE unwind
+      // CE unwinding while PE holds up = call writers stepping back. The old
+      // form (atmDeltaPE < -atmDeltaPE * 0.1) is algebraically just
+      // atmDeltaPE < 0, so it fired on put unwind despite the comment.
+      if (atmDeltaCE < 0 && atmDeltaPE >= 0) bull += 15;
       if (pcr > 1.3) bull += 10;   // heavy put OI = crowded put, contrarian bull
       if (pcr < 0.7) bear += 10;
 
@@ -8810,7 +8814,9 @@ const PANELS = [
       });
       if (ceVol + peVol === 0) return neutralPanel('No option volume yet today');
 
-      const volPCR = ceVol ? peVol / ceVol : 0;
+      // One-sided flow: 40k puts and no calls is extremely put-heavy, but
+      // ceVol ? ... : 0 reported it as 0 (i.e. call-heavy), the opposite read.
+      const volPCR = ceVol ? peVol / ceVol : (peVol > 0 ? 99 : 1);
       // Volume/OI ratio shows how much of today's activity is fresh rather than
       // legacy positioning — high means today's flow is driving, not last week's.
       const ceTurn = ceOI ? ceVol / ceOI : 0;
@@ -8847,9 +8853,14 @@ const PANELS = [
 
       const basis = fut.last_price - spot;
       const basisPct = (basis / spot) * 100;
-      const prevBasis = BRAIN.state.prevBasis;
-      BRAIN.state.prevBasis = basis;
-      const basisDelta = prevBasis != null ? basis - prevBasis : null;
+      // Only compare basis across ticks where the FUTURE actually refreshed.
+      // Otherwise spot moves alone and a falling market reads as a widening
+      // (bullish) basis, which is exactly backwards.
+      const futStamp = fut.at || BRAIN.state.futFetchedAt || 0;
+      const prev = BRAIN.state.prevBasisRec;
+      const futMoved = prev && prev.stamp !== futStamp;
+      const basisDelta = futMoved ? basis - prev.basis : null;
+      if (!prev || prev.stamp !== futStamp) BRAIN.state.prevBasisRec = { basis, stamp: futStamp };
 
       // Futures trading above spot means longs are paying to hold — positioning
       // is leaning long. A basis that widens as price rises confirms the move;
@@ -8859,9 +8870,9 @@ const PANELS = [
       if (basisDelta != null) {
         if (basisDelta > 0) bull += 25; else if (basisDelta < 0) bear += 25;
       }
-      const futOI = fut.oi || 0, prevFutOI = BRAIN.state.prevFutOI;
-      BRAIN.state.prevFutOI = futOI;
-      const oiDelta = prevFutOI != null ? futOI - prevFutOI : null;
+      const futOI = fut.oi || 0;
+      const oiDelta = futMoved && BRAIN.state.prevFutOI != null ? futOI - BRAIN.state.prevFutOI : null;
+      if (futMoved || BRAIN.state.prevFutOI == null) BRAIN.state.prevFutOI = futOI;
       if (oiDelta != null && basisDelta != null) {
         // OI rising with a widening basis = fresh longs, not short covering
         if (oiDelta > 0 && basisDelta > 0) bull += 15;
@@ -8985,8 +8996,13 @@ const PANELS = [
           peOiDelta = curPE - old5m.peOI;
         }
         // Trap signal: writers appearing = OI JUMPED on the breakout side
-        const writerPct = side === 'CE' ? (old5m ? (ceOiDelta / (old5m.ceOI || 1)) * 100 : 0)
-                                        : (old5m ? (peOiDelta / (old5m.peOI || 1)) * 100 : 0);
+        // A strike with no prior OI gives a meaningless ratio (0 -> 50k reads as
+        // +5,000,000%), so require a real base and clamp the result.
+        const baseOI = side === 'CE' ? (old5m?.ceOI || 0) : (old5m?.peOI || 0);
+        const rawDelta = side === 'CE' ? ceOiDelta : peOiDelta;
+        const writerPct = baseOI >= 500
+          ? Math.max(-100, Math.min(200, (rawDelta / baseOI) * 100))
+          : 0;
         if (breakout) {
           if (writerPct > 15) { bias = BIAS.BEAR; conf = Math.min(88, 55 + writerPct); reason = `Bull TRAP forming: ${nearStrike} CE OI +${writerPct.toFixed(1)}% at breakout — writers stepping in`; }
           else if (writerPct < -5) { bias = BIAS.BULL; conf = 72; reason = `Real breakout: ${nearStrike} CE OI unwinding (short covering)`; }
@@ -9115,6 +9131,13 @@ const PANELS = [
         if (!r) continue;
         const totalOI = (r.CE?.openInterest || 0) + (r.PE?.openInterest || 0);
         gexByStrike[strike] = totalOI * weights[k];
+      }
+      const gexTotal = Object.values(gexByStrike).reduce((a, b) => a + b, 0);
+      if (!gexTotal) {
+        return { bias: BIAS.NEUTRAL, confidence: 0,
+          reasoning: 'Chain has no open interest — cannot locate a pin',
+          data: [{ lbl: 'Active', val: 'NO DATA', cls: 'm' }],
+          formula: '// needs non-zero OI to compute a GEX peak' };
       }
       const peakStrike = Object.entries(gexByStrike).reduce((best, [s, g]) => g > best[1] ? [Number(s), g] : best, [atm, 0])[0];
       const pinDist = Math.abs(spot - peakStrike);
@@ -9256,7 +9279,12 @@ async function brainFetchTick() {
     const futStale = Date.now() - (BRAIN.state.futFetchedAt || 0) > 30000;
     if (futStale && BRAIN.index !== 'SENSEX') {
       const fr = await kiteApi('index-future', { symbol: BRAIN.index });
-      if (fr?.last_price) { ctx.future = fr; BRAIN.state.future = fr; BRAIN.state.futFetchedAt = Date.now(); }
+      const futQ = fr?.data || fr;
+      if (futQ?.last_price) {
+        ctx.future = { ...futQ, at: Date.now() };
+        BRAIN.state.future = ctx.future;
+        BRAIN.state.futFetchedAt = Date.now();
+      }
     } else {
       ctx.future = BRAIN.state.future || null;
     }
@@ -9271,16 +9299,19 @@ const Conductor = {
   },
   aggregate(panelResults, phase) {
     let bull = 0, bear = 0, participants = 0, biasCount = 0;
+    let bullWeight = 0, bearWeight = 0;
     const manipFlags = [];  // panels reporting MANIP with reasoning
     for (const [pid, r] of Object.entries(panelResults)) {
       if (!r || r.confidence === 0) continue;
       const w = this.weightFor(pid, phase);
-      if (r.bias === BIAS.BULL) { bull += r.confidence * w; biasCount++; }
-      else if (r.bias === BIAS.BEAR) { bear += r.confidence * w; biasCount++; }
+      if (r.bias === BIAS.BULL) { bull += r.confidence * w; bullWeight += w; biasCount++; participants++; }
+      else if (r.bias === BIAS.BEAR) { bear += r.confidence * w; bearWeight += w; biasCount++; participants++; }
       else if (r.bias === BIAS.MANIP) {
         manipFlags.push({ panel: pid, confidence: r.confidence, reasoning: r.reasoning });
+        participants++;
       }
-      participants++;
+      // A NEUTRAL panel has not contributed a view. Counting warmup placeholders
+      // as participants let a fully undecided brain report 10/10 confluence.
     }
 
     // MANIP veto: high-confidence manipulation panels reduce winning-side score
@@ -9312,7 +9343,10 @@ const Conductor = {
     else if (bull > bear && divergence >= 20) { verdict = 'LEAN_CE'; direction = BIAS.BULL; }
     else if (bear > bull && divergence >= 20) { verdict = 'LEAN_PE'; direction = BIAS.BEAR; }
 
-    const confidence = Math.min(95, Math.round(maxScore / (biasCount || 1)));
+    // Divide the weighted score by the weight actually applied, otherwise a
+    // single high-weight panel alone reads as 95% confidence.
+    const winWeight = (bull >= bear ? bullWeight : bearWeight) || 1;
+    const confidence = Math.min(95, Math.round(maxScore / winWeight));
     return { verdict, direction, bullScore: Math.round(bull), bearScore: Math.round(bear), divergence: Math.round(divergence), confluence, scoringCapable, participants, confidence, phase, manipFlags, manipTag, manipTotal: Math.round(manipTotal) };
   }
 };
@@ -9366,8 +9400,14 @@ function brainRiskGate(direction, ctx) {
   const dow = now.getDay(); // 4 = Thu
 
   const vix = ctx.vix, prev = BRAIN.state.prevVix;
-  const vixSpike = prev ? ((vix - prev) / prev) * 100 : 0;
-  gates.push({ name: 'VIX Spike', pass: vixSpike < 8, detail: 'Δ ' + vixSpike.toFixed(1) + '%' });
+  const vixKnown = typeof vix === 'number' && vix > 0 && typeof prev === 'number' && prev > 0;
+  const vixSpike = vixKnown ? ((vix - prev) / prev) * 100 : null;
+  gates.push({
+    name: 'VIX Spike',
+    pass: vixSpike == null ? true : vixSpike < 8,
+    pending: vixSpike == null,
+    detail: vixSpike == null ? 'VIX unavailable' : 'Δ ' + vixSpike.toFixed(1) + '% (tick)'
+  });
   const dteRow = ctx.optionChain?.strikes?.find(r => r.CE?.daysToExpiry != null || r.PE?.daysToExpiry != null);
   const dteGate = dteRow ? (dteRow.CE?.daysToExpiry ?? dteRow.PE?.daysToExpiry) : null;
   gates.push({
@@ -9818,10 +9858,18 @@ function brainSetIndex(idx, btn) {
   BRAIN.index = idx;
   document.querySelectorAll('#page-brain .nav-btn').forEach(b => b.classList.remove('on'));
   if (btn) btn.classList.add('on');
-  // Reset history for clean state
+  // Everything derived from the previous index has to go, not just history —
+  // a leftover basis or futures OI produces a huge bogus delta on the first
+  // tick of the new index.
   BRAIN.history.oi = [];
   BRAIN.history.price = [];
+  BRAIN.history.vix = [];
   BRAIN.history.perPanel = {};
+  Object.assign(BRAIN.state, {
+    panels: {}, conductor: null, optionChain: null, underlying: null,
+    future: null, futFetchedAt: 0, chainFetchedAt: 0,
+    prevBasisRec: null, prevFutOI: null, prevVix: null, vix: null
+  });
   brainTick();
 }
 
@@ -10626,8 +10674,26 @@ function relativeVolume(todayVol, sym) {
   }
   // Compare like-for-like: scale the baseline to how much of the session has elapsed
   const now = new Date();
+  const dow = now.getDay();
   const mins = (now.getHours() * 60 + now.getMinutes()) - (9 * 60 + 15);
-  const frac = Math.max(0.08, Math.min(1, mins / 375));
+  // Outside live hours there is no partial session to scale against — comparing
+  // a full day's volume to a fraction of the average manufactured SURGE on every
+  // stock at weekends, and QUIET on every stock in the first few minutes.
+  if (dow === 0 || dow === 6 || mins < 0 || mins > 375) {
+    const ratioFull = rec.avg > 0 ? todayVol / rec.avg : null;
+    return ratioFull == null
+      ? { verdict: 'UNKNOWN', ratio: null, note: 'no baseline' }
+      : { verdict: 'NORMAL', ratio: ratioFull, avg20: rec.avg, n: rec.n, sessionFrac: 1,
+          note: `${ratioFull.toFixed(1)}x its ${rec.n}-day average (full session, market closed)` };
+  }
+  // Intraday volume is U-shaped, not linear — the open alone is often 8-10%
+  // of the day. A linear fraction in the first stretch marks almost everything
+  // QUIET, so hold off rather than publish a verdict the model can't support.
+  if (mins < 20) {
+    return { verdict: 'UNKNOWN', ratio: null, avg20: rec.avg, n: rec.n,
+             note: 'too early in the session to compare against the daily average' };
+  }
+  const frac = Math.min(1, mins / 375);
   const expected = rec.avg * frac;
   const ratio = expected > 0 ? todayVol / expected : null;
   if (ratio === null) return { verdict: 'UNKNOWN', ratio: null, note: 'cannot scale baseline' };
@@ -10812,6 +10878,7 @@ async function stockRadarTick() {
 
   const quotes = await stockRadarFetch();
   if (!quotes) return;
+  STOCK_RADAR.lastBatchTs = Date.now();
 
   for (const stock of STOCK_RADAR.universe) {
     const q = quotes[stock.kite];
@@ -10822,6 +10889,7 @@ async function stockRadarTick() {
     const analytics = stockRadarScore(q, existing.ticks);
     STOCK_RADAR.data[stock.sym] = {
       ...stock,
+      _tickTs: STOCK_RADAR.lastBatchTs,
       quote: q,
       ltp: q.last_price,
       volume: q.volume || 0,
@@ -10839,7 +10907,11 @@ async function stockRadarTick() {
     : null;
   STOCK_RADAR.niftyLtp = nq?.last_price ?? null;
 
-  const rows = Object.values(STOCK_RADAR.data);
+  // Only rows refreshed by THIS batch get the second pass. A row that Kite
+  // omitted keeps its old object, and mutating it again each tick compounded
+  // its score without bound.
+  const freshTs = Date.now();
+  const rows = Object.values(STOCK_RADAR.data).filter(r => r._tickTs === freshTs || r._tickTs === STOCK_RADAR.lastBatchTs);
   const { list, map } = computeSectorAggregates(rows);
   STOCK_RADAR.sectors = list;
   STOCK_RADAR.sectorMap = map;
@@ -11437,9 +11509,10 @@ function paperBookAutoFromBrain() {
   if (!PAPER_BOOK.autoBrain) return;
   const c = BRAIN.state.conductor, strike = c?.strike;
   if (!c || !strike || (c.verdict !== 'STRONG_BUY_CE' && c.verdict !== 'STRONG_BUY_PE')) return;
+  // The risk gate is not advisory — if it is red the trade should not be booked.
+  if (c.gate && !c.gate.allPass) return;
   const key = c.verdict + '::' + strike.symbol;
   if (PAPER_BOOK.lastBrainVerdict === key) return;
-  PAPER_BOOK.lastBrainVerdict = key;
   const lotSize = strike.lotSize || BRAIN.indexMap[BRAIN.index]?.lotSize || 75;
   const entry = strike.ltp, sl = Number(strike.sl);
 
@@ -11454,9 +11527,12 @@ function paperBookAutoFromBrain() {
     conflicts: (c.manipFlags || []).map(m => m.panel)
   });
   if (size.blocked || !size.lots) {
+    // Deliberately do NOT mark this verdict as seen — sizing may clear on a
+    // later tick and this pair should still be eligible then.
     console.warn('[BRAIN-AUTO] sizing blocked:', size.blocked);
     return;
   }
+  PAPER_BOOK.lastBrainVerdict = key;
 
   paperBookAddPosition({
     sym: strike.symbol,
@@ -11859,13 +11935,18 @@ const STOCK_DEEP = {
 async function stockDeepDiveOpen(sym) {
   const row = STOCK_RADAR.data[sym];
   if (!row) { toast('No data for ' + sym, 'err'); return; }
-  STOCK_DEEP.sym = sym;
-  STOCK_DEEP.selectedStrike = null;
-  STOCK_DEEP.selectedSide = null;
-  STOCK_DEEP.lotSize = row.lot || 0;
+  // Every field derived from the previously opened stock has to be cleared,
+  // not just the symbol — otherwise B renders A's option chain, A's OI verdict,
+  // and IVStore.record() writes A's IV under B's key.
+  Object.assign(STOCK_DEEP, {
+    sym, lotSize: row.lot || 0,
+    selectedStrike: null, selectedSide: null, selected: null,
+    chain: null, chainLoadedAt: 0,
+    oi: null, bias: null, agreement: null,
+    atmIV: 0, ivVsHv: null, ivRank: null, hv: null
+  });
   $('sd-overlay').classList.add('open');
   $('sd-sym').textContent = sym + ' · ' + (row.sector || '—');
-  STOCK_DEEP.hv = null;
   stockDeepDiveRenderHeader(row);
   stockDeepDiveRenderEngines(row);
   // Realised vol and the chain load in parallel — neither blocks the other
@@ -11873,6 +11954,8 @@ async function stockDeepDiveOpen(sym) {
     fetchHV(sym, row.quote?.instrument_token),
     stockDeepDiveFetchChain(sym)
   ]);
+  // A slower earlier open must not stamp its HV onto the stock now on screen
+  if (STOCK_DEEP.sym !== sym) return;
   STOCK_DEEP.hv = hv;
   stockDeepDiveRenderEngines(row);
   stockDeepDiveRenderPicker();
@@ -12073,8 +12156,8 @@ async function stockDeepDiveFetchChain(sym) {
       STOCK_DEEP.chainLoadedAt = Date.now();
       stockDeepDiveRenderChain();
       // Re-run engines now that OI data exists, then the picker (needs combined bias)
-      const r = STOCK_RADAR.data[STOCK_DEEP.sym];
-      if (r) stockDeepDiveRenderEngines(r);
+      const radarRow = STOCK_RADAR.data[STOCK_DEEP.sym];
+      if (radarRow) stockDeepDiveRenderEngines(radarRow);
       stockDeepDiveRenderPicker();
     } else {
       ocEl.innerHTML = '<div style="padding:20px;text-align:center;color:var(--m);font-family:var(--f2);font-size:11px">Option chain empty — market may be closed or symbol non-tradable now.</div>';
@@ -12310,6 +12393,15 @@ function stockDeepDiveAddToPaper() {
   const sel = STOCK_DEEP.selected;
   if (!sel || sel.size?.blocked || !sel.lots) {
     toast('Position sizing blocked: ' + (sel?.size?.blocked || 'no size'), 'err');
+    return;
+  }
+  // The price can drift between picking a strike and pressing add. Booking the
+  // new entry against the old target/SL silently changes the risk, so re-size
+  // when it has moved materially.
+  const drift = sel.ltp > 0 ? Math.abs(ltp - sel.ltp) / sel.ltp : 0;
+  if (drift > 0.02) {
+    stockDeepDiveSelectStrike(sel.strike, sel.side, ltp, document.querySelector('.sd-strike-row.sel'));
+    toast(`Price moved ${(drift * 100).toFixed(1)}% — re-sized, press add again`, 'err');
     return;
   }
 
