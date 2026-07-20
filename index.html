@@ -8496,7 +8496,9 @@ const BrainStore = {
     for (let i = BRAIN.history.oi.length - 1; i >= 0; i--) {
       if (BRAIN.history.oi[i].ts <= cutoff) return BRAIN.history.oi[i];
     }
-    return BRAIN.history.oi[0] || null;
+    // No snapshot is actually that old yet. Returning the oldest one anyway
+    // made a 10-second-old reading masquerade as a 5-minute delta.
+    return null;
   },
   // Get OI for a specific strike at time X ago
   getStrikeAt(strike, agoMs) {
@@ -9066,11 +9068,11 @@ const PANELS = [
       let bias = BIAS.NEUTRAL, conf = 35, tag = 'no accumulation signal';
       if (priceSlopePct > 0.08 && ceAboveSlope < 5 && volSlope > 0) {
         bias = BIAS.BULL;
-        conf = Math.min(88, 55 + Math.min(20, priceSlopePct * 100) + (ceAboveSlope < 0 ? 10 : 0));
+        conf = Math.min(88, 55 + Math.min(20, Math.abs(priceSlopePct) * 25) + (ceAboveSlope < 0 ? 10 : 0));
         tag = `Silent BULL buildup: price ↑${priceSlopePct.toFixed(2)}% · CE writers absent (${ceAboveSlope.toFixed(1)}%) · vol expanding`;
       } else if (priceSlopePct < -0.08 && peBelowSlope < 5 && volSlope > 0) {
         bias = BIAS.BEAR;
-        conf = Math.min(88, 55 + Math.min(20, Math.abs(priceSlopePct) * 100) + (peBelowSlope < 0 ? 10 : 0));
+        conf = Math.min(88, 55 + Math.min(20, Math.abs(priceSlopePct) * 25) + (peBelowSlope < 0 ? 10 : 0));
         tag = `Silent BEAR buildup: price ↓${Math.abs(priceSlopePct).toFixed(2)}% · PE writers absent (${peBelowSlope.toFixed(1)}%) · vol expanding`;
       } else if (Math.abs(priceSlopePct) < 0.05 && volSlope > 0) {
         tag = `Range-bound + volume rising — accumulation but direction unclear`;
@@ -9438,11 +9440,16 @@ function brainRiskGate(direction, ctx) {
 // ─── Tick loop ──────────────────────────────────────────────────────────────
 async function brainTick() {
   if (!BRAIN.active) return;
+  if (BRAIN.ticking) return;          // overlapping ticks raced each other
+  BRAIN.ticking = true;
+  const tickIndex = BRAIN.index;      // if the user switches mid-flight, discard
   const t0 = Date.now();
+  try {
   BRAIN.tickCount++;
   BRAIN.lastTickAt = t0;
 
   const ctx = await brainFetchTick();
+  if (BRAIN.index !== tickIndex) { BRAIN.ticking = false; return; }
   BRAIN.state.optionChain = ctx.optionChain;
   BRAIN.state.underlying = ctx.underlying;
   BRAIN.state.otherQuotes = ctx.otherQuotes || {};
@@ -9493,6 +9500,9 @@ async function brainTick() {
   BrainStore.pushConductor({ ts: t0, verdict: verdict.verdict, bull: verdict.bullScore, bear: verdict.bearScore, confluence: verdict.confluence });
 
   BrainRender.paintAll();
+  } finally {
+    BRAIN.ticking = false;
+  }
 }
 
 // ─── Renderer ───────────────────────────────────────────────────────────────
@@ -9653,13 +9663,18 @@ const BrainRender = {
     // Real per-day theta off the chain. If the solver couldn't price it, say so
     // rather than showing a number that looks authoritative.
     const th = c.strike?.theta;
+    const lot = c.strike?.lotSize || 0;
     const thetaEl = $('brain-theta');
     if (th == null) {
       thetaEl.textContent = c.strike ? 'n/a' : '—';
       thetaEl.title = 'Theta unavailable — IV could not be solved for this strike';
+    } else if (lot) {
+      // Show what the trader actually loses — per lot, not per index point.
+      thetaEl.textContent = '₹' + Math.round(th * lot) + '/day';
+      thetaEl.title = `About ₹${Math.round(Math.abs(th) * lot)} per lot per day (₹${Math.abs(th).toFixed(1)}/unit x ${lot})`;
     } else {
       thetaEl.textContent = '₹' + th.toFixed(1) + '/day';
-      thetaEl.title = `Loses about ₹${Math.abs(th).toFixed(1)} per day per unit at current IV`;
+      thetaEl.title = `₹${Math.abs(th).toFixed(1)} per unit per day`;
     }
     // Hold guidance from how fast theta eats the premium, not a fixed guess
     const holdEl = $('brain-hold');
@@ -10762,7 +10777,11 @@ const IVStore = {
     if (arr.length > this.MAX_DAYS) d[sym] = arr.slice(-this.MAX_DAYS);
     this.save();
   },
-  series(sym) { return (this.load()[sym] || []).map(x => x.iv); }
+  series(sym) { return (this.load()[sym] || []).map(x => x.iv); },
+  seriesExcludingToday(sym) {
+    const today = localISO(new Date());
+    return (this.load()[sym] || []).filter(x => x.d !== today).map(x => x.iv);
+  }
 };
 
 /**
@@ -10770,7 +10789,10 @@ const IVStore = {
  * status: 'READY' | 'BUILDING'
  */
 function ivRank(sym, currentIV, minSamples = 10) {
-  const hist = IVStore.series(sym);
+  // Compare against PRIOR days only. Including today's snapshot in its own
+  // window made rank 100 and percentile 100 unreachable — precisely at the
+  // extremes where the reading matters.
+  const hist = IVStore.seriesExcludingToday(sym);
   const n = hist.length;
   if (!currentIV || currentIV <= 0) {
     return { status: 'BUILDING', n, rank: null, percentile: null, note: 'no current IV' };
@@ -11754,29 +11776,37 @@ const TUNE_ENGINES = [
 ];
 
 function computeTuningSuggestions(closed) {
-  const baseWins = closed.filter(e => e.outcome.win).length;
-  const baseRate = closed.length ? (baseWins / closed.length) * 100 : 0;
-
   return TUNE_ENGINES.map(te => {
+    // Only trades where this engine was even applicable. oiBias/rsVerdict etc.
+    // exist only on STOCK trades, so mixing in BRAIN-AUTO trades was comparing
+    // an engine against a population it never touched.
     const withFeature = closed.filter(e => e.f && e.f[te.key] != null);
     const hit  = withFeature.filter(e => te.positives.includes(e.f[te.key]));
     const miss = withFeature.filter(e => !te.positives.includes(e.f[te.key]));
-    if (hit.length < TUNING.MIN_BUCKET) {
-      return { ...te, ready: false, n: hit.length, need: TUNING.MIN_BUCKET };
+    if (hit.length < TUNING.MIN_BUCKET || miss.length < TUNING.MIN_BUCKET) {
+      return { ...te, ready: false, n: hit.length, needMiss: miss.length, need: TUNING.MIN_BUCKET };
     }
     const hitWins = hit.filter(e => e.outcome.win).length;
+    const missWins = miss.filter(e => e.outcome.win).length;
     const hitRate = (hitWins / hit.length) * 100;
-    const missRate = miss.length ? (miss.filter(e => e.outcome.win).length / miss.length) * 100 : null;
-    const edge = hitRate - baseRate;               // percentage points above the book's own average
-    const ci = Accuracy.wilson(hitWins, hit.length);
-    // Edge of +10pp maps to 1.25×, -10pp to 0.75×, clamped
+    const missRate = (missWins / miss.length) * 100;
+    // Compare firing vs NOT firing on the same kind of trade — the honest
+    // counterfactual, not the whole book which includes these very trades.
+    const edge = hitRate - missRate;
+    const ciHit = Accuracy.wilson(hitWins, hit.length);
     const raw = 1 + (edge / 40);
     const mult = Math.max(0.5, Math.min(1.5, +raw.toFixed(2)));
-    // If the confidence band straddles the baseline, the edge isn't established
-    const significant = ci && (ci.lo > baseRate || ci.hi < baseRate);
+    // Two-proportion z-test: is the firing win-rate genuinely different from
+    // not-firing? (|z| > 1.96 ~ 95%.) The earlier non-overlapping-CI rule was
+    // far too strict — a real 30pp edge at n=30 never passed it.
+    const p1 = hitWins / hit.length, p2 = missWins / miss.length;
+    const pPool = (hitWins + missWins) / (hit.length + miss.length);
+    const se = Math.sqrt(pPool * (1 - pPool) * (1 / hit.length + 1 / miss.length));
+    const z = se > 0 ? (p1 - p2) / se : 0;
+    const significant = Math.abs(z) > 1.96;
     return {
-      ...te, ready: true, n: hit.length, hitRate, missRate, baseRate, edge, ci, mult,
-      significant,
+      ...te, ready: true, n: hit.length, missN: miss.length,
+      hitRate, missRate, baseRate: missRate, edge, ci: ciHit, z: +z.toFixed(2), mult, significant,
       current: TUNING.get(te.engine)
     };
   });
@@ -11800,17 +11830,16 @@ function renderTuning(closed) {
     if (!s.ready) {
       return `<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px dashed var(--bd);font-family:var(--f2);font-size:10px">
         <span style="color:var(--t)">${s.label}</span>
-        <span style="color:var(--m)">only ${s.n}/${s.need} trades on this engine — no suggestion</span>
+        <span style="color:var(--m)">need ${TUNING.MIN_BUCKET}+ firing and ${TUNING.MIN_BUCKET}+ not-firing (have ${s.n}/${s.needMiss ?? 0}) — no suggestion</span>
       </div>`;
     }
     const col = s.edge > 0 ? 'var(--g)' : s.edge < 0 ? 'var(--r)' : 'var(--m)';
     return `<div style="display:grid;grid-template-columns:140px 1fr auto auto;gap:10px;align-items:center;padding:6px 0;border-bottom:1px dashed var(--bd);font-family:var(--f2);font-size:10px">
       <span style="color:var(--t);font-weight:700">${s.label}</span>
       <span style="color:var(--m)">
-        ${s.hitRate.toFixed(0)}% win when firing vs ${s.baseRate.toFixed(0)}% book average
+        ${s.hitRate.toFixed(0)}% firing (n=${s.n}) vs ${s.missRate.toFixed(0)}% not-firing (n=${s.missN})
         <span style="color:${col}"> (${s.edge >= 0 ? '+' : ''}${s.edge.toFixed(1)}pp)</span>
-        · n=${s.n} · 95% CI ${s.ci.lo.toFixed(0)}–${s.ci.hi.toFixed(0)}%
-        ${s.significant ? '' : '<span style="color:var(--y)"> · not statistically separated from baseline</span>'}
+        ${s.significant ? '' : '<span style="color:var(--y)"> · CIs overlap — not separated</span>'}
       </span>
       <span style="color:var(--m)">now ${s.current.toFixed(2)}×</span>
       <span style="color:${s.significant ? col : 'var(--m)'};font-weight:700">→ ${s.significant ? s.mult.toFixed(2) : s.current.toFixed(2)}×</span>
@@ -11901,9 +11930,14 @@ function initPaperBook() {
 // Realised-vol lookup, cached per symbol for the session (daily candles don't
 // change intraday, so one fetch per stock is enough).
 const HV_CACHE = {};
+const HV_TTL = 6 * 60 * 60 * 1000;
 async function fetchHV(sym, instrumentToken) {
-  if (HV_CACHE[sym] !== undefined) return HV_CACHE[sym];
-  if (!APP.kite?.active || !instrumentToken) { HV_CACHE[sym] = null; return null; }
+  const hit = HV_CACHE[sym];
+  // Only a successful value is worth caching. Caching a failure forever meant
+  // one open before Kite connected disabled the premium haircut for that
+  // symbol for the rest of the session.
+  if (hit && hit.v != null && (Date.now() - hit.at) < HV_TTL) return hit.v;
+  if (!APP.kite?.active || !instrumentToken) return null;
   try {
     const to = new Date();
     const from = new Date(); from.setDate(from.getDate() - 60);
@@ -11912,13 +11946,16 @@ async function fetchHV(sym, instrumentToken) {
       from: localISO(from), to: localISO(to), interval: 'day'
     });
     const candles = r?.data?.candles || [];
-    const closes = candles.map(c => c[4]).filter(x => typeof x === 'number' && x > 0);
-    HV_CACHE[sym] = computeHV(closes, 20);
+    // Drop the live partial bar — a part-day return understates realised vol,
+    // worst first thing in the morning.
+    const closes = candles.slice(0, -1).map(c => c[4]).filter(x => typeof x === 'number' && x > 0);
+    const v = computeHV(closes, 20);
+    if (v != null) HV_CACHE[sym] = { v, at: Date.now() };
+    return v;
   } catch (e) {
     console.warn('[HV] fetch failed for', sym, e);
-    HV_CACHE[sym] = null;
+    return null;
   }
-  return HV_CACHE[sym];
 }
 
 const STOCK_DEEP = {
