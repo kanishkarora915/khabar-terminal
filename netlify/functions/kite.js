@@ -481,6 +481,24 @@ exports.handler = async (event) => {
           return { statusCode: 200, headers: H, body: JSON.stringify({ error: `OC build failed: ${ocErr.message}` }) };
         }
       }
+      case 'nse-equities': {
+        // Full NSE cash-segment list. NSE's own autocomplete is unreachable from
+        // datacenter IPs, so search is driven off this instead — fetched once and
+        // cached client-side, which also makes it instant instead of per-keystroke.
+        const csv = await kiteFetchRaw('/instruments/NSE', api_key, access_token);
+        if (!csv || csv.length < 100) { result = { data: null, error: 'NSE instruments CSV empty' }; break; }
+        const rows = parseCSV(csv);
+        const eq = rows
+          .filter(i => i.segment === 'NSE' && i.instrument_type === 'EQ')
+          .map(i => ({
+            s: i.tradingsymbol,
+            n: i.name || i.tradingsymbol,
+            t: i.instrument_token
+          }))
+          .sort((a, b) => a.s.localeCompare(b.s));
+        result = { data: { equities: eq, count: eq.length, fetched_at: Date.now() } };
+        break;
+      }
       case 'index-future': {
         // Near-month future for an index, used for the basis panel.
         const sym = (body.symbol || 'NIFTY').toUpperCase();

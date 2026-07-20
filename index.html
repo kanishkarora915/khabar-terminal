@@ -2626,6 +2626,7 @@ function activateKite() {
   // Auto-boot Stocks Radar in background (60s poll off-tab, 15s on-tab)
   if (typeof initStockRadar === 'function' && !STOCK_RADAR.active) initStockRadar();
   if (typeof eventsRefresh === 'function') eventsRefresh();
+  if (typeof EquityUniverse !== 'undefined') EquityUniverse.ensure();
   // Auto-boot PaperBook so auto-trade + live P&L work everywhere
   if (typeof initPaperBook === 'function') initPaperBook();
 }
@@ -3054,38 +3055,116 @@ async function refreshBankOI() {
 
 // ═══════════════════════════════════════════════════════
 // STOCK SEARCH
+// Driven off the full NSE cash list pulled once from Kite and cached, rather
+// than NSE's autocomplete — that endpoint is unreachable from the deployed
+// function, which is why search used to return nothing at all. Searching a
+// local list is also instant instead of a network round-trip per keystroke.
 // ═══════════════════════════════════════════════════════
+const EquityUniverse = {
+  KEY: 'khabar_nse_equities_v1',
+  TTL: 24 * 60 * 60 * 1000,
+  list: null,          // [{s: symbol, n: name, t: token}]
+  loading: false,
+  error: null,
+
+  loadCache() {
+    if (this.list) return this.list;
+    try {
+      const d = JSON.parse(localStorage.getItem(this.KEY) || 'null');
+      if (d && (Date.now() - d.ts) < this.TTL && Array.isArray(d.equities)) {
+        this.list = d.equities;
+        return this.list;
+      }
+    } catch(e) {}
+    return null;
+  },
+
+  async ensure() {
+    if (this.loadCache()) return this.list;
+    if (this.loading || !APP.kite?.active) return null;
+    this.loading = true;
+    this.error = null;
+    try {
+      const r = await kiteApi('nse-equities');
+      if (r?.equities?.length) {
+        this.list = r.equities;
+        try { localStorage.setItem(this.KEY, JSON.stringify({ equities: r.equities, ts: Date.now() })); } catch(e) {}
+      } else {
+        this.error = r?.error || 'empty instrument list';
+      }
+    } catch (e) {
+      this.error = e.message;
+    } finally {
+      this.loading = false;
+    }
+    return this.list;
+  },
+
+  /**
+   * Exact symbol match first, then symbol prefix, then name contains.
+   * Ranked this way so typing "TCS" puts TCS at the top rather than
+   * whatever happens to sort first alphabetically.
+   */
+  search(q, limit = 20) {
+    const list = this.list;
+    if (!list || !q) return [];
+    const s = q.trim().toUpperCase();
+    const exact = [], prefix = [], symContains = [], nameMatch = [];
+    for (const it of list) {
+      const sym = it.s;
+      if (sym === s) { exact.push(it); continue; }
+      if (sym.startsWith(s)) { prefix.push(it); continue; }
+      if (sym.includes(s)) { symContains.push(it); continue; }
+      if ((it.n || '').toUpperCase().includes(s)) nameMatch.push(it);
+      if (exact.length + prefix.length + symContains.length + nameMatch.length > limit * 6) break;
+    }
+    return [...exact, ...prefix, ...symContains, ...nameMatch].slice(0, limit);
+  }
+};
+
+// Shared renderer for both search boxes
+function renderAutocomplete(listEl, items, onPickName, emptyMsg) {
+  if (!items.length) {
+    listEl.style.display = 'block';
+    listEl.innerHTML = `<div class="ac-item" style="cursor:default"><div style="font-size:10px;color:var(--m)">${emptyMsg}</div></div>`;
+    return;
+  }
+  listEl.style.display = 'block';
+  listEl.innerHTML = items.map((x, i) =>
+    `<div class="ac-item" onclick="${onPickName}(${i})">
+       <div><span class="ac-sym">${x.s}</span>
+       <div style="font-size:9px;color:var(--m)">${x.n || ''}</div></div>
+     </div>`).join('');
+}
+
+function searchEmptyMessage(q) {
+  // If a list exists, a miss is genuinely a miss — say so rather than blaming
+  // the connection, which was the wrong message when the list was already loaded.
+  if (EquityUniverse.list?.length) return `No match for "${q}" in ${EquityUniverse.list.length} NSE stocks`;
+  if (EquityUniverse.loading) return 'Loading stock list…';
+  if (EquityUniverse.error) return 'Could not load list — ' + EquityUniverse.error;
+  if (!APP.kite?.active) return 'Connect Zerodha to load the stock list';
+  return 'Stock list not loaded yet';
+}
+
 let searchTimer = null;
 async function onSearch(v) {
   clearTimeout(searchTimer);
   const q = v.trim();
-  if (q.length < 2) { $('ac-list').style.display = 'none'; return; }
-  searchTimer = setTimeout(async () => {
-    const data = await api('search', { query: q });
-    if (!data) return;
-    // NSE search returns various formats depending on endpoint
-    let items = [];
-    if (Array.isArray(data)) items = data;
-    else if (data.symbols) items = data.symbols;
-    else if (data.searchResult) items = data.searchResult;
-    else if (data.data) items = Array.isArray(data.data) ? data.data : [];
-    else if (typeof data === 'object') { const vals = Object.values(data).find(v => Array.isArray(v)); if (vals) items = vals; }
-    if (!items.length) { $('ac-list').style.display = 'none'; return; }
-    APP.acList = items.slice(0, 20);
-    const el = $('ac-list');
-    el.style.display = 'block';
-    el.innerHTML = APP.acList.map((x, i) => {
-      const sym = x.symbol || x.symbol_info || x.tradingsymbol || '';
-      const name = x.company_name || x.symbol_info || x.name || '';
-      return `<div class="ac-item" onclick="selectAC(${i})"><div><span class="ac-sym">${sym}</span><div style="font-size:9px;color:var(--m)">${name}</div></div></div>`;
-    }).join('');
-  }, 200);
+  const el = $('ac-list');
+  if (q.length < 1) { el.style.display = 'none'; return; }
+  EquityUniverse.ensure();
+  searchTimer = setTimeout(() => {
+    const items = EquityUniverse.search(q, 20);
+    APP.acList = items;
+    renderAutocomplete(el, items, 'selectAC', searchEmptyMessage(q));
+  }, 60);
 }
 
 function selectAC(i) {
   const x = APP.acList[i];
-  const sym = x.symbol || x.symbol_info || x.tradingsymbol || '';
-  $('search-input').value = sym;
+  if (!x) return;
+  $('search-input').value = x.s;
   $('ac-list').style.display = 'none';
   analyzeStock();
 }
@@ -3103,31 +3182,19 @@ let deskSearchTimer;
 async function onDeskSearch(v) {
   clearTimeout(deskSearchTimer);
   const q = v.trim();
-  if (q.length < 2) { $('desk-ac-list').style.display = 'none'; return; }
-  deskSearchTimer = setTimeout(async () => {
-    const data = await api('search', { query: q });
-    if (!data) return;
-    let items = [];
-    if (Array.isArray(data)) items = data;
-    else if (data.symbols) items = data.symbols;
-    else if (data.searchResult) items = data.searchResult;
-    else if (data.data) items = Array.isArray(data.data) ? data.data : [];
-    else if (typeof data === 'object') { const vals = Object.values(data).find(v => Array.isArray(v)); if (vals) items = vals; }
-    if (!items.length) { $('desk-ac-list').style.display = 'none'; return; }
-    APP.deskAcList = items.slice(0, 20);
-    const el = $('desk-ac-list');
-    el.style.display = 'block';
-    el.innerHTML = APP.deskAcList.map((x, i) => {
-      const sym = x.symbol || x.symbol_info || x.tradingsymbol || '';
-      const name = x.company_name || x.symbol_info || x.name || '';
-      return `<div class="ac-item" onclick="selectDeskAC(${i})"><div><span class="ac-sym">${sym}</span><div style="font-size:9px;color:var(--m)">${name}</div></div></div>`;
-    }).join('');
-  }, 200);
+  const el = $('desk-ac-list');
+  if (q.length < 1) { el.style.display = 'none'; return; }
+  EquityUniverse.ensure();
+  deskSearchTimer = setTimeout(() => {
+    const items = EquityUniverse.search(q, 20);
+    APP.deskAcList = items;
+    renderAutocomplete(el, items, 'selectDeskAC', searchEmptyMessage(q));
+  }, 60);
 }
 function selectDeskAC(i) {
   const x = APP.deskAcList[i];
-  const sym = x.symbol || x.symbol_info || x.tradingsymbol || '';
-  $('desk-search').value = sym;
+  if (!x) return;
+  $('desk-search').value = x.s;
   $('desk-ac-list').style.display = 'none';
   runDeskAnalysis();
 }
