@@ -1,3 +1,4 @@
 node_modules/
 .netlify/
 index.html.pre-v2
+.data/

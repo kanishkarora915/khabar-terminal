@@ -1,0 +1,17 @@
+# Render blueprint — one web service with a persistent disk for training data.
+# Deploy: push to GitHub, then on render.com "New +" → "Blueprint" → pick this repo.
+services:
+  - type: web
+    name: khabar-terminal
+    runtime: node
+    plan: starter                 # starter has persistent-disk support; free tier does not
+    buildCommand: ""              # no build step — static app + zero-dep server
+    startCommand: node server.js
+    healthCheckPath: /healthz
+    envVars:
+      - key: DATA_DIR
+        value: /var/data
+    disk:
+      name: khabar-data
+      mountPath: /var/data
+      sizeGB: 1

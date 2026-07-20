@@ -1,4 +1,13 @@
 {
   "name": "khabar-terminal",
-  "private": true
+  "private": true,
+  "version": "3.0.0",
+  "description": "KHABAR PRO trading terminal",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
 }

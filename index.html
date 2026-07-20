@@ -8327,6 +8327,10 @@ async function installPWA() {
 window.onload = async () => {
   // License gate removed — go straight to Kite auth flow
 
+  // Seed local stores from the durable disk before anything reads them.
+  // No-ops instantly on Netlify (no /store routes) so it never delays boot.
+  try { await ServerSync.restore(); } catch (e) {}
+
   loadSavedCredentials();
 
   // Check for Zerodha callback (returning from login)
@@ -10635,7 +10639,7 @@ const VolBaseline = {
     catch(e) { this.data = {}; }
     return this.data;
   },
-  save() { try { localStorage.setItem(this.KEY, JSON.stringify(this.data || {})); } catch(e) {} },
+  save() { try { localStorage.setItem(this.KEY, JSON.stringify(this.data || {})); } catch(e) {} ServerSync.push('vol_baseline', this.data || {}); },
 
   get(sym) {
     const rec = this.load()[sym];
@@ -10764,6 +10768,7 @@ const IVStore = {
   },
   save() {
     try { localStorage.setItem(this.KEY, JSON.stringify(this.data || {})); } catch(e) {}
+    ServerSync.push('iv_history', this.data || {});
   },
   // One snapshot per symbol per day — later reads on the same day overwrite it.
   record(sym, iv) {
@@ -11207,6 +11212,78 @@ const PAPER_BOOK = {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// SERVER SYNC
+// When the app runs on the Render server there is a persistent disk behind
+// /store/*; the training data (journal, IV history, baselines, tuned weights)
+// mirrors to it so it survives a cache-clear and follows the user across
+// devices. On Netlify those routes 404, so this silently stays localStorage-only
+// and nothing depends on it succeeding.
+// ═══════════════════════════════════════════════════════════════════════════════
+const ServerSync = {
+  available: null,         // null = unknown, true/false once probed
+  async probe() {
+    if (this.available !== null) return this.available;
+    try {
+      const r = await fetch('/healthz', { method: 'GET' });
+      const j = await r.json();
+      this.available = !!(j && j.ok && j.dataDir);
+    } catch (e) { this.available = false; }
+    return this.available;
+  },
+  async pull(ns) {
+    if (!(await this.probe())) return null;
+    try {
+      const r = await fetch('/store/' + ns);
+      if (!r.ok) return null;
+      const j = await r.json();
+      return j.ok ? j.value : null;
+    } catch (e) { return null; }
+  },
+  _queues: {},   // per-namespace promise chain so writes land in the order issued
+  push(ns, value) {
+    // Non-blocking for the caller, but serialised per namespace: two rapid saves
+    // (e.g. add-then-clear) must not race and leave the disk on the older value.
+    // The snapshot is taken now, so the exact value at call time is what syncs.
+    const snapshot = JSON.stringify(value);
+    const prev = this._queues[ns] || Promise.resolve();
+    this._queues[ns] = prev.then(async () => {
+      if (!(await this.probe())) return;
+      try {
+        await fetch('/store/' + ns, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ value: JSON.parse(snapshot) })
+        });
+      } catch (e) {}
+    });
+  },
+
+  // On boot: if the durable disk has data the browser lacks (fresh device, or a
+  // cleared cache), seed localStorage from it BEFORE the stores lazy-load. The
+  // browser stays the working copy; the server is the backing store.
+  async restore() {
+    if (!(await this.probe())) return { restored: [] };
+    const MAP = {
+      signal_journal: 'khabar_signal_journal_v1',
+      iv_history:     'khabar_iv_history_v1',
+      vol_baseline:   'khabar_vol_baseline_v1',
+      tuned_weights:  'khabar_tuned_weights_v1'
+    };
+    const restored = [];
+    for (const [ns, key] of Object.entries(MAP)) {
+      const local = localStorage.getItem(key);
+      const localEmpty = !local || local === '{}' || local === '[]' || local === 'null';
+      if (!localEmpty) continue;   // never clobber a non-empty local copy
+      const remote = await this.pull(ns);
+      if (remote && (Array.isArray(remote) ? remote.length : Object.keys(remote).length)) {
+        try { localStorage.setItem(key, JSON.stringify(remote)); restored.push(ns); } catch (e) {}
+      }
+    }
+    return { restored };
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // SIGNAL JOURNAL
 // Every position is stamped with the full state of every engine at the moment it
 // was opened, then with what actually happened when it closed. That pairing is
@@ -11230,7 +11307,9 @@ const SignalJournal = {
   save() {
     try {
       const e = this.entries || [];
-      localStorage.setItem(this.KEY, JSON.stringify(e.slice(-this.MAX)));
+      const trimmed = e.slice(-this.MAX);
+      localStorage.setItem(this.KEY, JSON.stringify(trimmed));
+      ServerSync.push('signal_journal', trimmed);
     } catch(err) { console.warn('[JOURNAL] save failed', err); }
   },
 
@@ -11761,7 +11840,7 @@ const TUNING = {
     catch(e) { this.weights = {}; }
     return this.weights;
   },
-  save() { try { localStorage.setItem(this.KEY, JSON.stringify(this.weights || {})); } catch(e) {} },
+  save() { try { localStorage.setItem(this.KEY, JSON.stringify(this.weights || {})); } catch(e) {} ServerSync.push('tuned_weights', this.weights || {}); },
   get(engine) { return this.load()[engine]?.mult ?? 1.0; },
   reset() { this.weights = {}; this.save(); toast('Tuned weights cleared — back to defaults'); renderAccuracy(); }
 };
