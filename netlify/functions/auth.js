@@ -12,6 +12,7 @@ const VALID_KEYS = {
   'KHABAR-PRO-5A9GT': { user: 'User 8', active: true },
   'KHABAR-PRO-2E4MR': { user: 'User 9', active: true },
   'KHABAR-PRO-0J1ZX': { user: 'User 10', active: true },
+  'KHABAR-MASTER-KEY': { user: 'Kanishk Arora', active: true, master: true },
 };
 
 exports.handler = async (event) => {

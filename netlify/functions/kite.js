@@ -63,6 +63,84 @@ function parseCSV(csv) {
   });
 }
 
+// ─── Black-Scholes implied volatility (bisection solver) ─────────────────────
+function normCDF(x) {
+  // Abramowitz-Stegun approximation
+  const a1=0.254829592, a2=-0.284496736, a3=1.421413741, a4=-1.453152027, a5=1.061405429, p=0.3275911;
+  const sign = x < 0 ? -1 : 1;
+  x = Math.abs(x) / Math.sqrt(2);
+  const t = 1 / (1 + p * x);
+  const y = 1 - (((((a5*t + a4)*t) + a3)*t + a2)*t + a1) * t * Math.exp(-x*x);
+  return 0.5 * (1 + sign * y);
+}
+
+function bsPrice(S, K, T, r, sigma, isCall) {
+  if (T <= 0 || sigma <= 0) return Math.max(0, isCall ? S - K : K - S);
+  const d1 = (Math.log(S/K) + (r + sigma*sigma/2) * T) / (sigma * Math.sqrt(T));
+  const d2 = d1 - sigma * Math.sqrt(T);
+  return isCall
+    ? S * normCDF(d1) - K * Math.exp(-r*T) * normCDF(d2)
+    : K * Math.exp(-r*T) * normCDF(-d2) - S * normCDF(-d1);
+}
+
+// Returns IV as a percentage (e.g. 14.2), or 0 if unsolvable
+function impliedVol(price, S, K, T, isCall, r = 0.065) {
+  if (!price || !S || !K || T <= 0) return 0;
+  const intrinsic = Math.max(0, isCall ? S - K : K - S);
+  if (price <= intrinsic) return 0;          // no time value → can't solve
+  let lo = 0.001, hi = 5.0;                   // 0.1% to 500% vol
+  if (bsPrice(S, K, T, r, hi, isCall) < price) return 0;  // price above max model value
+  for (let i = 0; i < 60; i++) {
+    const mid = (lo + hi) / 2;
+    if (bsPrice(S, K, T, r, mid, isCall) < price) lo = mid; else hi = mid;
+    if (hi - lo < 1e-6) break;
+  }
+  const iv = ((lo + hi) / 2) * 100;
+  return (iv > 0.5 && iv < 400) ? Math.round(iv * 10) / 10 : 0;
+}
+
+function normPDF(x) { return Math.exp(-x * x / 2) / Math.sqrt(2 * Math.PI); }
+
+/**
+ * Black-Scholes greeks. Returns nulls rather than zeros when unsolvable, so the
+ * UI can say "unknown" instead of showing a confident 0.00.
+ * theta is per calendar DAY (the number a buyer actually feels overnight).
+ * vega is per 1 percentage-point move in IV.
+ */
+function bsGreeks(S, K, T, sigmaPct, isCall, r = 0.065) {
+  if (!S || !K || !T || T <= 0 || !sigmaPct || sigmaPct <= 0) {
+    return { delta: null, gamma: null, theta: null, vega: null };
+  }
+  const sigma = sigmaPct / 100;
+  const sqT = Math.sqrt(T);
+  const d1 = (Math.log(S / K) + (r + sigma * sigma / 2) * T) / (sigma * sqT);
+  const d2 = d1 - sigma * sqT;
+  const pdf = normPDF(d1);
+  const disc = Math.exp(-r * T);
+
+  const delta = isCall ? normCDF(d1) : normCDF(d1) - 1;
+  const gamma = pdf / (S * sigma * sqT);
+  const vega  = S * pdf * sqT / 100;
+  const thetaYear = isCall
+    ? (-S * pdf * sigma / (2 * sqT)) - r * K * disc * normCDF(d2)
+    : (-S * pdf * sigma / (2 * sqT)) + r * K * disc * normCDF(-d2);
+
+  const r4 = v => (isFinite(v) ? Math.round(v * 10000) / 10000 : null);
+  return {
+    delta: r4(delta),
+    gamma: r4(gamma),
+    theta: r4(thetaYear / 365),
+    vega:  r4(vega)
+  };
+}
+
+// Years until expiry (expiry is end-of-day IST on that date)
+function yearsToExpiry(expiryStr) {
+  const exp = new Date(expiryStr + 'T15:30:00+05:30');
+  const ms = exp.getTime() - Date.now();
+  return Math.max(ms / (365 * 24 * 60 * 60 * 1000), 1 / (365 * 24 * 60));  // floor at 1 min
+}
+
 async function getInstruments(apiKey, token) {
   if (instrumentsCache.data && Date.now() - instrumentsCache.ts < 3600000) return instrumentsCache.data;
   const csv = await kiteFetchRaw('/instruments/NFO', apiKey, token);
@@ -172,6 +250,7 @@ async function buildOptionChain(apiKey, token, symbol, expiry) {
 
   // Build option chain
   const chainData = [];
+  const T = yearsToExpiry(selectedExpiry);
   nearStrikes.forEach(strike => {
     const ceInst = nearOpts.find(o => parseFloat(o.strike) === strike && o.instrument_type === 'CE');
     const peInst = nearOpts.find(o => parseFloat(o.strike) === strike && o.instrument_type === 'PE');
@@ -181,13 +260,28 @@ async function buildOptionChain(apiKey, token, symbol, expiry) {
     const row = { strikePrice: strike, expiryDate: fmtSelectedExpiry };
 
     if (ceQuote) {
+      const ceOI = ceQuote.oi || 0;
+      const ceDayLow = ceQuote.oi_day_low;
+      const ceVol = ceQuote.volume || 0;
+      // Multi-tier changeinOpenInterest: real day_low > volume proxy > 0
+      let ceOIChange = 0;
+      if (ceDayLow && ceDayLow > 0 && ceDayLow !== ceOI) ceOIChange = ceOI - ceDayLow;
+      else if (ceVol > 0 && ceOI > 0) ceOIChange = Math.round(ceVol * 0.3);
+
+      const ceIVsolved = impliedVol(ceQuote.last_price, spot, strike, T, true);
       row.CE = {
         strikePrice: strike, expiryDate: fmtSelectedExpiry, underlying: symbol, underlyingValue: spot,
-        openInterest: ceQuote.oi || 0,
-        changeinOpenInterest: (ceQuote.oi || 0) - (ceQuote.oi_day_low || ceQuote.oi || 0),
-        pchangeinOpenInterest: 0,
-        totalTradedVolume: ceQuote.volume || 0,
-        impliedVolatility: 0,
+        tradingsymbol: ceInst.tradingsymbol,
+        kiteSymbol: `NFO:${ceInst.tradingsymbol}`,
+        instrumentToken: ceInst.instrument_token,
+        lotSize: parseInt(ceInst.lot_size) || 0,
+        openInterest: ceOI,
+        changeinOpenInterest: ceOIChange,
+        pchangeinOpenInterest: ceDayLow && ceDayLow > 0 ? ((ceOI - ceDayLow) / ceDayLow) * 100 : 0,
+        totalTradedVolume: ceVol,
+        impliedVolatility: ceIVsolved,
+        ...bsGreeks(spot, strike, T, ceIVsolved, true),
+        daysToExpiry: +(T * 365).toFixed(2),
         lastPrice: ceQuote.last_price || 0,
         change: ceQuote.net_change || 0,
         pChange: ceQuote.ohlc?.close ? ((ceQuote.last_price - ceQuote.ohlc.close) / ceQuote.ohlc.close * 100) : 0,
@@ -197,17 +291,33 @@ async function buildOptionChain(apiKey, token, symbol, expiry) {
         bidprice: ceQuote.depth?.buy?.[0]?.price || 0,
         askQty: ceQuote.depth?.sell?.[0]?.quantity || 0,
         askPrice: ceQuote.depth?.sell?.[0]?.price || 0,
+        oi_day_high: ceQuote.oi_day_high || 0,
+        oi_day_low: ceDayLow || 0,
       };
     }
 
     if (peQuote) {
+      const peOI = peQuote.oi || 0;
+      const peDayLow = peQuote.oi_day_low;
+      const peVol = peQuote.volume || 0;
+      let peOIChange = 0;
+      if (peDayLow && peDayLow > 0 && peDayLow !== peOI) peOIChange = peOI - peDayLow;
+      else if (peVol > 0 && peOI > 0) peOIChange = Math.round(peVol * 0.3);
+
+      const peIVsolved = impliedVol(peQuote.last_price, spot, strike, T, false);
       row.PE = {
         strikePrice: strike, expiryDate: fmtSelectedExpiry, underlying: symbol, underlyingValue: spot,
-        openInterest: peQuote.oi || 0,
-        changeinOpenInterest: (peQuote.oi || 0) - (peQuote.oi_day_low || peQuote.oi || 0),
-        pchangeinOpenInterest: 0,
-        totalTradedVolume: peQuote.volume || 0,
-        impliedVolatility: 0,
+        tradingsymbol: peInst.tradingsymbol,
+        kiteSymbol: `NFO:${peInst.tradingsymbol}`,
+        instrumentToken: peInst.instrument_token,
+        lotSize: parseInt(peInst.lot_size) || 0,
+        openInterest: peOI,
+        changeinOpenInterest: peOIChange,
+        pchangeinOpenInterest: peDayLow && peDayLow > 0 ? ((peOI - peDayLow) / peDayLow) * 100 : 0,
+        totalTradedVolume: peVol,
+        impliedVolatility: peIVsolved,
+        ...bsGreeks(spot, strike, T, peIVsolved, false),
+        daysToExpiry: +(T * 365).toFixed(2),
         lastPrice: peQuote.last_price || 0,
         change: peQuote.net_change || 0,
         pChange: peQuote.ohlc?.close ? ((peQuote.last_price - peQuote.ohlc.close) / peQuote.ohlc.close * 100) : 0,
@@ -217,6 +327,8 @@ async function buildOptionChain(apiKey, token, symbol, expiry) {
         bidprice: peQuote.depth?.buy?.[0]?.price || 0,
         askQty: peQuote.depth?.sell?.[0]?.quantity || 0,
         askPrice: peQuote.depth?.sell?.[0]?.price || 0,
+        oi_day_high: peQuote.oi_day_high || 0,
+        oi_day_low: peDayLow || 0,
       };
     }
 
@@ -368,6 +480,46 @@ exports.handler = async (event) => {
         } catch (ocErr) {
           return { statusCode: 200, headers: H, body: JSON.stringify({ error: `OC build failed: ${ocErr.message}` }) };
         }
+      }
+      case 'index-future': {
+        // Near-month future for an index, used for the basis panel.
+        const sym = (body.symbol || 'NIFTY').toUpperCase();
+        const instruments = await getInstruments(api_key, access_token);
+        const futs = instruments
+          .filter(i => i.segment === 'NFO-FUT' && i.name === sym)
+          .sort((a, b) => new Date(a.expiry) - new Date(b.expiry));
+        if (!futs.length) { result = { data: null, error: `No futures found for ${sym}` }; break; }
+        const near = futs[0];
+        const q = await kiteFetch(`/quote?i=${encodeURIComponent('NFO:' + near.tradingsymbol)}`, api_key, access_token);
+        const quote = q?.data ? Object.values(q.data)[0] : null;
+        result = { data: quote ? {
+          tradingsymbol: near.tradingsymbol,
+          expiry: near.expiry,
+          last_price: quote.last_price,
+          oi: quote.oi || 0,
+          volume: quote.volume || 0,
+          ohlc: quote.ohlc || null
+        } : null, error: quote ? null : 'Future quote empty' };
+        break;
+      }
+      case 'fo-stocks': {
+        // Return unique F&O stock universe from cached NFO instruments dump
+        // Filter: NFO-FUT segment (stock futures = full F&O universe)
+        //         Exclude index futures (NIFTY, BANKNIFTY, FINNIFTY, MIDCPNIFTY, SENSEX, BANKEX)
+        const EXCLUDE = new Set(['NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY', 'SENSEX', 'BANKEX', 'NIFTYNXT50']);
+        const instruments = await getInstruments(api_key, access_token);
+        // Group by name — pick the nearest expiry for each stock's lot_size (most current)
+        const byName = {};
+        for (const i of instruments) {
+          if (i.segment !== 'NFO-FUT') continue;
+          if (EXCLUDE.has(i.name)) continue;
+          if (!byName[i.name] || new Date(i.expiry) < new Date(byName[i.name].expiry)) {
+            byName[i.name] = { sym: i.name, lot: parseInt(i.lot_size) || 0, expiry: i.expiry, instrument_token: i.instrument_token, exchange: 'NSE' };
+          }
+        }
+        const stocks = Object.values(byName).sort((a, b) => a.sym.localeCompare(b.sym));
+        result = { stocks, count: stocks.length, cached_at: Date.now() };
+        break;
       }
       case 'holdings':
         result = await kiteFetch('/portfolio/holdings', api_key, access_token);

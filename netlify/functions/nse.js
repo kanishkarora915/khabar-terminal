@@ -5,7 +5,7 @@ const zlib = require('zlib');
 let cookieCache = { cookies: '', ts: 0 };
 const COOKIE_TTL = 60000;
 const cache = {};
-const CACHE_TTL = { quote: 8000, 'option-chain': 10000, indices: 8000, 'index-stocks': 15000, search: 30000, history: 300000 };
+const CACHE_TTL = { quote: 8000, 'option-chain': 10000, indices: 8000, 'index-stocks': 15000, search: 30000, history: 300000, 'event-calendar': 3600000, 'fo-ban': 1800000 };
 
 function httpGet(hostname, path, headers = {}, timeout = 15000) {
   return new Promise((resolve, reject) => {
@@ -45,6 +45,33 @@ function httpGet(hostname, path, headers = {}, timeout = 15000) {
             resolve({ data: null, error: 'Decode failed: ' + e.message, status: res.statusCode });
           }
         }
+      });
+    });
+    req.on('error', e => reject(e));
+    req.setTimeout(timeout, () => { req.destroy(); reject(new Error('Timeout')); });
+    req.end();
+  });
+}
+
+function httpGetText(hostname, path, headers = {}, timeout = 10000) {
+  return new Promise((resolve, reject) => {
+    const req = https.request({ hostname, path, method: 'GET', headers: {
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+      'Accept': 'text/csv,text/plain,*/*',
+      'Accept-Encoding': 'gzip, deflate',
+      ...headers } }, res => {
+      const chunks = [];
+      res.on('data', c => chunks.push(c));
+      res.on('end', () => {
+        const buf = Buffer.concat(chunks);
+        const enc = res.headers['content-encoding'];
+        try {
+          let text;
+          if (enc === 'gzip') text = zlib.gunzipSync(buf).toString();
+          else if (enc === 'deflate') text = zlib.inflateSync(buf).toString();
+          else text = buf.toString();
+          resolve({ text, status: res.statusCode });
+        } catch (e) { resolve({ text: buf.toString(), status: res.statusCode }); }
       });
     });
     req.on('error', e => reject(e));
@@ -96,6 +123,26 @@ async function getNSECookies() {
     }
   }
   return '';
+}
+
+// Single-shot fetch with a short timeout. Used for optional/enrichment endpoints
+// (events, ban list) where a slow failure is worse than no data — these must never
+// eat the whole function budget and hang the caller.
+async function nseFetchFast(path, timeout = 6000) {
+  try {
+    const cookies = await getNSECookies();
+    return await httpGet('www.nseindia.com', path, {
+      'Cookie': cookies,
+      'Referer': 'https://www.nseindia.com/companies-listing/corporate-filings-event-calendar',
+      'Accept': 'application/json, text/javascript, */*; q=0.01',
+      'X-Requested-With': 'XMLHttpRequest',
+      'Sec-Fetch-Dest': 'empty',
+      'Sec-Fetch-Mode': 'cors',
+      'Sec-Fetch-Site': 'same-origin',
+    }, timeout);
+  } catch (e) {
+    return { data: null, error: e.message, status: 0 };
+  }
 }
 
 async function nseFetch(path) {
@@ -190,6 +237,61 @@ exports.handler = async (event) => {
       case 'market-status':
         result = await nseFetch('/api/marketStatus');
         break;
+
+      case 'event-calendar': {
+        // NSE's own calendar sits behind Akamai bot protection and is unreachable
+        // from datacenter IPs. BSE publishes the same board-meeting/results dates
+        // and its API is reachable, so we use that as the source of truth.
+        const r = await httpGet('api.bseindia.com',
+          '/BseIndiaAPI/api/Corpforthresults/w?strCat=-1&strType=C',
+          { 'Accept': 'application/json',
+            'Referer': 'https://www.bseindia.com/',
+            'Origin': 'https://www.bseindia.com' }, 12000).catch(e => ({ data: null, error: e.message }));
+
+        const raw = Array.isArray(r?.data) ? r.data : (Array.isArray(r?.data?.Table) ? r.data.Table : null);
+        let events = [];
+        if (raw) {
+          events = raw.map(e => ({
+            symbol:  String(e.short_name || '').toUpperCase().trim(),
+            company: e.Long_Name || '',
+            purpose: 'Results',
+            date:    e.meeting_date || ''
+          })).filter(e => e.symbol && e.date);
+        }
+        result = { data: {
+          events, count: events.length,
+          source: raw ? 'bseindia:Corpforthresults' : null,
+          ok: !!raw,
+          error: raw ? null : (r?.error || 'BSE forthcoming-results unavailable'),
+          fetched_at: Date.now()
+        } };
+        break;
+      }
+
+      case 'fo-ban': {
+        // The archives subdomain serves a plain CSV and is not Akamai-gated.
+        const r = await httpGetText('nsearchives.nseindia.com', '/content/fo/fo_secban.csv', {}, 10000)
+                    .catch(e => ({ text: null, error: e.message }));
+        let symbols = [], banDate = null;
+        if (r?.text) {
+          const lines = r.text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+          const hdr = lines.find(l => /ban for trade date/i.test(l));
+          if (hdr) { const m = hdr.match(/(\d{2}-[A-Za-z]{3}-\d{4})/); if (m) banDate = m[1]; }
+          lines.forEach(l => {
+            if (/ban for trade date/i.test(l)) return;
+            const m = l.match(/^\d+\s*,\s*([A-Za-z0-9&\-]+)\s*$/);
+            if (m) symbols.push(m[1].toUpperCase());
+          });
+        }
+        result = { data: {
+          symbols, count: symbols.length, banDate,
+          ok: !!r?.text,
+          error: r?.text ? null : (r?.error || 'NSE ban CSV unavailable'),
+          fetched_at: Date.now()
+        } };
+        break;
+      }
+
       case 'fii-dii':
         // Real FII/DII data from NSE
         result = await nseFetch('/api/fiidiiTradeReact');
