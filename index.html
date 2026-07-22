@@ -8263,25 +8263,33 @@ function startRefresh() {
 // ═══════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════
-async function initDashboard() {
-  toast('Loading market data...', 'info');
+function initDashboard() {
+  // The app is interactive immediately; market data streams in behind it.
+  // Nothing here is awaited, so a slow feed (news RSS ~5s) or a doomed NSE
+  // call (blocked from the server, retries then fails) can no longer hold up
+  // the "ready" state and leave the whole screen looking stuck on "loading".
 
-  // Load all data in parallel — show last session data even when market closed
-  const results = await Promise.allSettled([
-    refreshIndices(),
-    refreshNews(),
-    refreshBankOI(),
-    refreshGainersLosers(),
-    loadFnO('NIFTY', $('fno-nifty')),  // Pre-load option chain
-  ]);
+  // Kite-backed, fast — the ticker tape and index strip
+  refreshIndices().catch(() => {});
 
-  // Auto-load NIFTY 50 on equity page (non-blocking)
+  // NSE-backed equity sections. NSE is blocked from the server so these mostly
+  // fail; fire them non-blocking so they populate if they ever can, but never
+  // gate boot on them.
+  refreshBankOI().catch(() => {});
+  refreshGainersLosers().catch(() => {});
+  loadFnO('NIFTY', $('fno-nifty')).catch(() => {});
+
+  // Auto-load NIFTY 50 on the equity page
   $('search-input').value = 'NIFTY 50';
   analyzeStock().catch(() => {});
 
+  // News RSS is the single slowest feed (~5s) and nobody sees it until the
+  // PULSE tab. Defer it so it never competes with first paint.
+  APP._newsLoaded = false;
+  setTimeout(() => { refreshNews().catch(() => {}); APP._newsLoaded = true; }, 4000);
+
   startRefresh();
   toast('KHABAR Terminal Ready ✓');
-
 }
 
 // ═══════════════════════════════════════════════════════
