@@ -2635,6 +2635,15 @@ function activateKite() {
   $('conn-txt').textContent = 'KITE LIVE';
   toast('Welcome! Zerodha connected ✓');
   initDashboard();
+  // Hand the server our token so its OI-snapshot cron can run continuously
+  // (no-op on Netlify — the route 404s and ServerSync stays unavailable).
+  ServerSync.probe().then(ok => {
+    if (ok && APP.kite.access_token && APP.kite.api_key) {
+      fetch('/kite-token', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ access_token: APP.kite.access_token, api_key: APP.kite.api_key }) }).catch(() => {});
+    }
+  });
+
   // Auto-boot BRAIN — starts background 10s tick so MARKET STRIP is live on every page
   if (typeof initBrain === 'function' && !BRAIN.active) initBrain();
   // Auto-boot Stocks Radar in background (60s poll off-tab, 15s on-tab)
@@ -10251,11 +10260,27 @@ const BrainRender = {
 };
 
 // ─── Boot / index switch ────────────────────────────────────────────────────
+async function brainSeedOIFromServer() {
+  // If the server has been building OI snapshots continuously, seed the local
+  // rolling window from it so the manipulation engines have real depth on the
+  // first tick instead of starting empty. No-op on Netlify.
+  try {
+    if (!(await ServerSync.probe())) return;
+    const r = await fetch('/oi-history/' + BRAIN.index);
+    const j = await r.json();
+    const server = j?.history?.[BRAIN.index];
+    if (Array.isArray(server) && server.length > BRAIN.history.oi.length) {
+      BRAIN.history.oi = server.slice(-BrainStore.MAX_OI_SNAPSHOTS);
+    }
+  } catch (e) {}
+}
+
 function initBrain() {
   if (BRAIN.active) return;
   BRAIN.active = true;
   BRAIN.startTime = Date.now();
   BRAIN.tickCount = 0;
+  brainSeedOIFromServer();   // seed continuous history before the first real tick
   // Kick first tick immediately
   brainTick();
   // Schedule adaptive ticks: fast 5s on BRAIN tab, slow 10s in background

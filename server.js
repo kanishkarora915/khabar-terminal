@@ -37,6 +37,66 @@ const STORE_NS = new Set([
 function ensureDataDir() {
   try { fs.mkdirSync(DATA_DIR, { recursive: true }); } catch (e) {}
 }
+
+// ─── Continuous OI snapshot cron ────────────────────────────────────────────────
+// The manipulation engines (wall / trap / stealth) read a rolling OI time-series.
+// In the browser that only builds while a BRAIN tab is open. Here the server keeps
+// building it every 30s during market hours from the user's own token, so the
+// history is continuous and survives a page close. The client seeds its window
+// from /oi-history on load.
+const OI = {
+  token: null, apiKey: null,               // supplied by the client after login
+  hist: {},                                // index -> [{ts, pcr, maxPain, strikes:[…]}]
+  MAX: 240,                                // 30s × 240 = 2h rolling
+  tokFile: path.join(DATA_DIR, 'kite_token.json'),
+  histFile: path.join(DATA_DIR, 'oi_history.json'),
+
+  load() {
+    try { const t = JSON.parse(fs.readFileSync(this.tokFile, 'utf8')); this.token = t.access_token; this.apiKey = t.api_key; } catch (e) {}
+    try { this.hist = JSON.parse(fs.readFileSync(this.histFile, 'utf8')) || {}; } catch (e) { this.hist = {}; }
+  },
+  saveTok() { try { ensureDataDir(); fs.writeFileSync(this.tokFile, JSON.stringify({ access_token: this.token, api_key: this.apiKey })); } catch (e) {} },
+  saveHist() { try { ensureDataDir(); fs.writeFileSync(this.histFile, JSON.stringify(this.hist)); } catch (e) {} },
+
+  // IST market-hours check (server runs UTC on Render)
+  marketOpen() {
+    const nowUTC = Date.now();
+    const ist = new Date(nowUTC + 5.5 * 3600 * 1000);
+    const day = ist.getUTCDay();                    // 0 Sun … 6 Sat
+    if (day === 0 || day === 6) return false;
+    const mins = ist.getUTCHours() * 60 + ist.getUTCMinutes();
+    return mins >= (9 * 60 + 15) && mins <= (15 * 60 + 30);
+  },
+
+  async tick() {
+    if (!this.token || !this.apiKey || !this.marketOpen()) return;
+    for (const index of ['NIFTY', 'BANKNIFTY']) {
+      try {
+        const out = await FUNCTIONS.kite({ httpMethod: 'POST', body: JSON.stringify({
+          action: 'option-chain', symbol: index, api_key: this.apiKey, access_token: this.token
+        }) });
+        const data = JSON.parse(out.body || '{}');
+        const rows = data?.records?.data;
+        if (!rows?.length) continue;
+        let totalCE = 0, totalPE = 0;
+        rows.forEach(r => { totalCE += r.CE?.openInterest || 0; totalPE += r.PE?.openInterest || 0; });
+        // max pain
+        let maxPain = rows[0]?.strikePrice || 0, minPain = Infinity;
+        rows.forEach(t => { const K = t.strikePrice; let pain = 0;
+          rows.forEach(s => { if (K > s.strikePrice) pain += (s.CE?.openInterest||0)*(K-s.strikePrice);
+                              if (K < s.strikePrice) pain += (s.PE?.openInterest||0)*(s.strikePrice-K); });
+          if (pain < minPain) { minPain = pain; maxPain = K; } });
+        const snap = { ts: Date.now(), pcr: totalCE ? totalPE/totalCE : 0, maxPain,
+          strikes: rows.map(r => ({ strike: r.strikePrice, ceOI: r.CE?.openInterest||0, peOI: r.PE?.openInterest||0,
+                                    ceIV: r.CE?.impliedVolatility||0, peIV: r.PE?.impliedVolatility||0 })) };
+        const arr = this.hist[index] = this.hist[index] || [];
+        arr.push(snap);
+        if (arr.length > this.MAX) this.hist[index] = arr.slice(-this.MAX);
+      } catch (e) { /* skip this index this tick */ }
+    }
+    this.saveHist();
+  }
+};
 function storePath(ns) { return path.join(DATA_DIR, ns + '.json'); }
 
 function storeGet(ns) {
@@ -190,10 +250,31 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // ── Client hands the server its Kite token so the OI cron can run ──
+  if (url === '/kite-token' && (req.method === 'POST' || req.method === 'PUT')) {
+    const body = await readBody(req);
+    try {
+      const j = JSON.parse(body || '{}');
+      if (j.access_token && j.api_key) { OI.token = j.access_token; OI.apiKey = j.api_key; OI.saveTok(); }
+      res.writeHead(200, { ...CORS, 'Content-Type': 'application/json' }).end(JSON.stringify({ ok: true, cronArmed: !!OI.token }));
+    } catch (e) { res.writeHead(400, CORS).end(JSON.stringify({ error: e.message })); }
+    return;
+  }
+
+  // ── Server-built continuous OI history (seeds the client's rolling window) ──
+  if (url.startsWith('/oi-history')) {
+    const idx = (url.split('?')[0].split('/')[2] || '').toUpperCase();
+    const payload = idx ? { [idx]: OI.hist[idx] || [] } : OI.hist;
+    res.writeHead(200, { ...CORS, 'Content-Type': 'application/json' })
+       .end(JSON.stringify({ ok: true, marketOpen: OI.marketOpen(), armed: !!OI.token, history: payload }));
+    return;
+  }
+
   // ── Health check for Render ──
   if (url === '/healthz') {
     res.writeHead(200, { 'Content-Type': 'application/json' })
-       .end(JSON.stringify({ ok: true, dataDir: DATA_DIR, functions: Object.keys(FUNCTIONS) }));
+       .end(JSON.stringify({ ok: true, dataDir: DATA_DIR, functions: Object.keys(FUNCTIONS),
+         oiCron: { armed: !!OI.token, marketOpen: OI.marketOpen(), indices: Object.keys(OI.hist), snapshots: Object.fromEntries(Object.entries(OI.hist).map(([k,v])=>[k,v.length])) } }));
     return;
   }
 
@@ -203,5 +284,8 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   ensureDataDir();
-  console.log(`KHABAR server on :${PORT}  ·  data dir ${DATA_DIR}  ·  functions ${Object.keys(FUNCTIONS).join(', ')}`);
+  OI.load();
+  // Continuous OI snapshots every 30s (no-op outside market hours / without a token)
+  setInterval(() => { OI.tick().catch(() => {}); }, 30000);
+  console.log(`KHABAR server on :${PORT}  ·  data dir ${DATA_DIR}  ·  functions ${Object.keys(FUNCTIONS).join(', ')}  ·  OI cron armed=${!!OI.token}`);
 });
