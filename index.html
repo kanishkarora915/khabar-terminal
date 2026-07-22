@@ -2231,8 +2231,8 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
         <span id="pb-count-line" style="font-family:var(--f2);font-size:10px;color:var(--m);letter-spacing:1.5px">— OPEN · — CLOSED TODAY</span>
       </div>
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-        <label style="display:flex;align-items:center;gap:5px;font-family:var(--f2);font-size:10px;color:var(--m);letter-spacing:1px;cursor:pointer">
-          <input type="checkbox" id="pb-auto-brain" onchange="paperBookToggleAuto('brain', this.checked)" style="accent-color:var(--p)"> AUTO-BRAIN
+        <label title="Auto-trades BRAIN signals only during market hours (09:15–15:30 IST). Stays armed overnight; turns itself on at the open and off at the close." style="display:flex;align-items:center;gap:5px;font-family:var(--f2);font-size:10px;color:var(--m);letter-spacing:1px;cursor:pointer">
+          <input type="checkbox" id="pb-auto-brain" onchange="paperBookToggleAuto('brain', this.checked)" style="accent-color:var(--p)"> AUTO-BRAIN <span style="font-size:8px;color:var(--bd-bright)">9:15–3:30</span>
         </label>
         <label title="Not enabled yet — needs OI + liquidity guards before auto-trading stock options" style="display:flex;align-items:center;gap:5px;font-family:var(--f2);font-size:10px;color:var(--bd-bright);letter-spacing:1px;cursor:not-allowed">
           <input type="checkbox" id="pb-auto-stocks" disabled style="accent-color:var(--a)"> AUTO-STOCKS <span style="font-size:8px;color:var(--y)">(SOON)</span>
@@ -11632,13 +11632,42 @@ async function initStockRadar() {
 const PAPER_BOOK = {
   KEY: 'khabar_paper_book_v1',
   positions: [],           // [{id, sym, side, strike, kite, entry, qty, target, sl, source, status, openedAt, closedAt, closePrice, closeReason, pnl}]
-  autoBrain: false,
+  autoBrain: false,        // live "is firing right now" flag — driven by the schedule
+  autoSchedule: true,      // armed to auto-trade during market hours (09:15–15:30 IST)
   autoStocks: false,
   currentTab: 'open',
   timer: null,
   lastBrainVerdict: null,  // dedupe auto-adds
   lastStockPicks: {}       // sym → last time picked
 };
+
+// True only during the NSE continuous session — Mon–Fri, 09:15–15:30 IST.
+// Computed in IST explicitly (not the device clock) so the auto-trade gate is
+// correct even if the browser runs in another timezone.
+function nseMarketOpen() {
+  const dev = new Date();
+  const istMs = dev.getTime() + (dev.getTimezoneOffset() * 60000) + (5.5 * 3600000);
+  const d = new Date(istMs);
+  const day = d.getDay();                       // 0 Sun … 6 Sat
+  if (day === 0 || day === 6) return false;
+  const mins = d.getHours() * 60 + d.getMinutes();
+  return mins >= 555 && mins <= 930;            // 09:15 → 15:30
+}
+
+// Keep AUTO-BRAIN's firing state in sync with the market clock. When armed
+// (autoSchedule), it turns itself ON at 09:15 and OFF at 15:30 IST with no
+// manual clicks. Runs every timer tick, so it self-corrects across the open
+// and close even if the tab was left running overnight.
+function paperBookApplySchedule() {
+  if (!PAPER_BOOK.autoSchedule) { PAPER_BOOK.autoBrain = false; return; }
+  const open = nseMarketOpen();
+  if (PAPER_BOOK.autoBrain !== open) {
+    PAPER_BOOK.autoBrain = open;
+    if (open) PAPER_BOOK.lastBrainVerdict = null;   // fresh session, allow first fire
+    paperBookSave();
+    if (typeof toast === 'function') toast('AUTO-BRAIN ' + (open ? 'ON — market open (09:15–15:30 IST)' : 'OFF — market closed'));
+  }
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // SERVER SYNC
@@ -11932,9 +11961,12 @@ function paperBookLoad() {
     if (raw) {
       const data = JSON.parse(raw);
       PAPER_BOOK.positions = data.positions || [];
-      PAPER_BOOK.autoBrain = !!data.autoBrain;
+      // autoSchedule defaults to ON (armed) — undefined means a pre-schedule save.
+      PAPER_BOOK.autoSchedule = data.autoSchedule !== false;
       PAPER_BOOK.autoStocks = !!data.autoStocks;
-      if ($('pb-auto-brain'))  $('pb-auto-brain').checked  = PAPER_BOOK.autoBrain;
+      // The checkbox reflects "armed", not the live firing state — it stays
+      // checked overnight and the schedule flips autoBrain by the clock.
+      if ($('pb-auto-brain'))  $('pb-auto-brain').checked  = PAPER_BOOK.autoSchedule;
       if ($('pb-auto-stocks')) $('pb-auto-stocks').checked = PAPER_BOOK.autoStocks;
     }
   } catch(e) { console.warn('[PB] load err', e); }
@@ -11943,14 +11975,25 @@ function paperBookSave() {
   try {
     localStorage.setItem(PAPER_BOOK.KEY, JSON.stringify({
       positions: PAPER_BOOK.positions,
-      autoBrain: PAPER_BOOK.autoBrain,
+      autoSchedule: PAPER_BOOK.autoSchedule,
       autoStocks: PAPER_BOOK.autoStocks
     }));
   } catch(e) { console.warn('[PB] save err', e); }
 }
 
 function paperBookToggleAuto(kind, on) {
-  if (kind === 'brain')  PAPER_BOOK.autoBrain  = !!on;
+  if (kind === 'brain') {
+    // The AUTO-BRAIN checkbox arms/disarms the market-hours schedule. When
+    // armed it only fires during 09:15–15:30 IST; disarming stops it entirely.
+    PAPER_BOOK.autoSchedule = !!on;
+    paperBookApplySchedule();
+    paperBookSave();
+    const open = nseMarketOpen();
+    toast(on
+      ? (open ? 'AUTO-BRAIN armed — trading now (market open)' : 'AUTO-BRAIN armed — will start at 09:15 IST')
+      : 'AUTO-BRAIN disarmed');
+    return;
+  }
   if (kind === 'stocks') PAPER_BOOK.autoStocks = !!on;
   paperBookSave();
   toast('Auto-' + kind + ' ' + (on ? 'enabled' : 'disabled'));
@@ -12486,8 +12529,10 @@ function initPaperBook() {
   paperBookLoad();
   paperBookRender();
   paperBookUpdateBadge();
+  paperBookApplySchedule();
   if (PAPER_BOOK.timer) return;
   PAPER_BOOK.timer = setInterval(() => {
+    paperBookApplySchedule();
     paperBookTick();
     paperBookAutoFromBrain();
   }, 10000);
