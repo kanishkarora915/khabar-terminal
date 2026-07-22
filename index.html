@@ -9420,7 +9420,7 @@ function brainSelectStrike(direction, confidence, chain, spot) {
     expectedMovePct: expectedMove ? expectedMove.oneSigmaPct : null,
     reachable: a.reachable, pop: a.pop, thetaDecay: a.thetaDecay, skew: a.skew,
     projRR: a.projRR, targetSpot, slSpot,
-    levelBasis: `Δ${(Math.abs(opt.delta||0)).toFixed(2)} · ${best.moneyness} · projected payoff`,
+    levelBasis: `${best.moneyness} · projected payoff`,
     alternatives: sel.alternatives.map(alt => ({
       strike: alt.row.strikePrice, moneyness: alt.moneyness, delta: alt.opt.delta,
       ltp: alt.opt.lastPrice, score: alt.score, grade: alt.liq.grade
