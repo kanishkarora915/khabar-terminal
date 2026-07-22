@@ -11756,6 +11756,7 @@ const SignalJournal = {
       sl: pos.sl,
       qty: pos.qty,
       lots: pos.lots || null,
+      reason: pos.reason || null,
       f: features || {},
       outcome: null
     });
@@ -11955,6 +11956,54 @@ function paperBookToggleAuto(kind, on) {
   toast('Auto-' + kind + ' ' + (on ? 'enabled' : 'disabled'));
 }
 
+// Compose a plain-language "why" for a BRAIN auto trade from the live state.
+function buildBrainReason(c, size, strike) {
+  const parts = [];
+  parts.push({ h: 'Verdict', t: `${c.verdict.replace(/_/g,' ')} @ ${c.confidence}% confidence · ${c.confluence}/10 engines agree · divergence ${c.divergence}%` });
+  // top contributing panels
+  const panels = Object.entries(BRAIN.state.panels || {})
+    .filter(([, v]) => v && v.bias !== 'NEUTRAL' && v.confidence > 0)
+    .sort((a, b) => b[1].confidence - a[1].confidence).slice(0, 5)
+    .map(([k, v]) => `${k.replace(/_/g,' ')}: ${v.bias} ${v.confidence}% — ${v.reasoning}`);
+  if (panels.length) parts.push({ h: 'Why', t: panels });
+  if (strike) {
+    const bm = [];
+    if (strike.breakeven != null) bm.push(`breakeven ${bfmt(strike.breakeven,0)} (${strike.breakevenMovePct>=0?'+':''}${(strike.breakevenMovePct||0).toFixed(2)}%)`);
+    if (strike.expectedMovePct != null) bm.push(`expected move ±${strike.expectedMovePct.toFixed(2)}%`);
+    if (strike.reachable) bm.push(`target ${strike.reachable}`);
+    if (strike.pop?.deltaPOP != null) bm.push(`POP ${strike.pop.deltaPOP.toFixed(0)}%`);
+    if (strike.projRR != null) bm.push(`R:R 1:${strike.projRR.toFixed(2)}`);
+    if (strike.thetaDecay) bm.push(`theta ${strike.thetaDecay.perDayPct.toFixed(1)}%/day`);
+    if (bm.length) parts.push({ h: 'Buyer math', t: bm.join(' · ') });
+  }
+  // order flow if live
+  const of = OrderFlow.compute?.();
+  if (of?.ok) parts.push({ h: 'Live tape', t: of.reason });
+  // sizing
+  if (size?.steps?.length) parts.push({ h: 'Position size', t: `${size.lots} lot(s) · ` + size.steps.map(s => s.k + ' ' + s.v).join(' · ') });
+  // risk gate
+  if (c.gate?.gates) parts.push({ h: 'Risk gate', t: c.gate.gates.map(g => (g.pass?'✓':'✗') + ' ' + g.name).join(' · ') });
+  return parts;
+}
+
+// …and for a stock deep-dive trade.
+function buildStockReason(sym, side, selected) {
+  const row = STOCK_RADAR.data[sym] || {};
+  const oi = STOCK_DEEP.oi, ev = eventRisk(sym);
+  const parts = [];
+  parts.push({ h: 'Verdict', t: `${STOCK_DEEP.agreement || '—'} · price ${row.bias} (score ${row.score}) · OI ${oi?.ok ? oi.bias + ' (' + oi.net + ')' : '—'}` });
+  const why = [];
+  if (row.rs?.ok) why.push(`Relative strength: ${row.rs.verdict} (${row.rs.reasons?.join(', ')})`);
+  if (oi?.ok) why.push(`OI: ${oi.buildupNote}`);
+  if (row.relVol?.verdict && row.relVol.verdict !== 'UNKNOWN') why.push(`Volume: ${row.relVol.note}`);
+  if (STOCK_DEEP.ivVsHv?.verdict && STOCK_DEEP.ivVsHv.verdict !== 'UNKNOWN') why.push(`Premium: ${STOCK_DEEP.ivVsHv.note}`);
+  if (why.length) parts.push({ h: 'Why', t: why });
+  const s = selected?.size;
+  if (s) parts.push({ h: 'Position size', t: `${s.lots} lot(s) · ` + (s.steps||[]).map(x => x.k + ' ' + x.v).join(' · ') });
+  parts.push({ h: 'Event gate', t: `${ev.severity} — ${ev.reasons.join(', ')}` });
+  return parts;
+}
+
 function paperBookAddPosition(pos) {
   // dedupe: same symbol + side + status open in last 10 min?
   const now = Date.now();
@@ -11962,6 +12011,7 @@ function paperBookAddPosition(pos) {
   if (dup) return null;
 
   const entry = {
+    reason: pos.reason || null,
     id: 'T' + now.toString(36) + Math.floor(Math.random() * 900 + 100),
     sym: pos.sym,
     side: pos.side,
@@ -12074,7 +12124,8 @@ function paperBookAutoFromBrain() {
     sl,
     source: 'BRAIN-AUTO',
     kite: strike.kiteSymbol || null,
-    features: captureBrainFeatures()
+    features: captureBrainFeatures(),
+    reason: buildBrainReason(c, size, strike)
   });
 }
 
@@ -12102,8 +12153,19 @@ function paperBookRender() {
     const sourceCls = p.source.includes('AUTO') ? 'auto' : p.side === 'CE' ? 'ce' : 'pe';
     const statusCls = isOpen ? 'open' : pnl > 0 ? 'win' : 'loss';
     const timeStr = new Date(isOpen ? p.openedAt : p.closedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false });
-    return `<tr class="pos-row" style="border-bottom:1px solid var(--bd)">
-      <td style="padding:6px 10px;color:var(--m)">${i + 1}</td>
+    const hasReason = p.reason && p.reason.length;
+    const reasonRow = hasReason ? `<tr id="reason-${p.id}" style="display:none;background:var(--bg)"><td colspan="13" style="padding:10px 16px">
+      <div style="font-family:var(--f2);font-size:9px;color:var(--m);letter-spacing:1.5px;margin-bottom:6px">WHY THIS TRADE — captured at entry</div>
+      ${p.reason.map(part => `<div style="margin-bottom:5px;font-family:var(--f2);font-size:10px">
+        <span style="color:var(--a);font-weight:700">${part.h}:</span>
+        ${Array.isArray(part.t)
+          ? '<div style="margin-top:2px">' + part.t.map(x => `<div style="color:var(--t);padding-left:10px;line-height:1.5">• ${x}</div>`).join('') + '</div>'
+          : `<span style="color:var(--t)"> ${part.t}</span>`}
+      </div>`).join('')}
+      ${!isOpen ? `<div style="margin-top:6px;padding-top:6px;border-top:1px dashed var(--bd);font-family:var(--f2);font-size:10px"><span style="color:${pnl>=0?'var(--g)':'var(--r)'};font-weight:700">EXIT:</span> <span style="color:var(--t)">${p.closeReason || 'closed'} @ ₹${(p.closePrice||0).toFixed(2)} · P&L ${pnl>=0?'+':''}₹${pnl.toFixed(0)} · held ${Math.round(((p.closedAt||now)-p.openedAt)/60000)}m</span></div>` : ''}
+    </td></tr>` : '';
+    return `<tr class="pos-row" style="border-bottom:1px solid var(--bd);${hasReason?'cursor:pointer':''}" ${hasReason?`onclick="const r=document.getElementById('reason-${p.id}');if(r)r.style.display=r.style.display==='none'?'table-row':'none'"`:''}>
+      <td style="padding:6px 10px;color:var(--m)">${hasReason ? '<span style="color:var(--a)">▸</span> ' : ''}${i + 1}</td>
       <td style="padding:6px 10px;color:var(--t);font-weight:700">${p.sym}</td>
       <td style="padding:6px 10px;text-align:center"><span class="pos-badge ${p.side === 'CE' ? 'ce' : 'pe'}">${p.side}</span></td>
       <td style="padding:6px 10px;text-align:right;color:var(--t)">₹${p.entry.toFixed(2)}</td>
@@ -12115,8 +12177,8 @@ function paperBookRender() {
       <td style="padding:6px 10px;text-align:center"><span class="pos-badge ${sourceCls}">${p.source}</span></td>
       <td style="padding:6px 10px;text-align:center"><span class="pos-badge ${statusCls}">${isOpen ? 'OPEN' : p.closeReason || 'CLOSED'}</span></td>
       <td style="padding:6px 10px;text-align:center;color:var(--m);font-size:10px">${timeStr}</td>
-      <td style="padding:6px 10px;text-align:center">${isOpen ? `<button onclick="paperBookClosePosition('${p.id}', ${ltp}, 'MANUAL')" style="background:var(--bg);border:1px solid var(--bd);color:var(--r);padding:3px 8px;border-radius:2px;font-family:var(--f2);font-size:10px;cursor:pointer">CLOSE</button>` : '<span style="color:var(--m);font-size:10px">—</span>'}</td>
-    </tr>`;
+      <td style="padding:6px 10px;text-align:center">${isOpen ? `<button onclick="event.stopPropagation();paperBookClosePosition('${p.id}', ${ltp}, 'MANUAL')" style="background:var(--bg);border:1px solid var(--bd);color:var(--r);padding:3px 8px;border-radius:2px;font-family:var(--f2);font-size:10px;cursor:pointer">CLOSE</button>` : '<span style="color:var(--m);font-size:10px">—</span>'}</td>
+    </tr>${reasonRow}`;
   }).join('');
 }
 
@@ -13211,7 +13273,8 @@ function stockDeepDiveAddToPaper() {
     sl: sel.sl,
     source: STOCK_DEEP.agreement === 'CONFIRMED' ? 'STOCK-CONF' : 'STOCK-DEEP',
     kite: o.kiteSymbol || null,
-    features: captureStockFeatures(STOCK_DEEP.sym)
+    features: captureStockFeatures(STOCK_DEEP.sym),
+    reason: buildStockReason(STOCK_DEEP.sym, side, sel)
   });
 }
 

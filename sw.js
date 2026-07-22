@@ -1,5 +1,5 @@
 // KHABAR Service Worker — PWA Support v5.1 (Real IV + NFO symbols + live auto-P&L)
-const CACHE_NAME = 'khabar-v48-oicron';
+const CACHE_NAME = 'khabar-v49-reasons';
 const STATIC_ASSETS = [
   '/icon.svg',
   '/icon-192.png',
