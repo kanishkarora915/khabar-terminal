@@ -9413,6 +9413,37 @@ const PANELS = [
     }
   },
   {
+    id: 'GLOBAL', name: 'GLOBAL CONTEXT', source: 'finnhub', icon: '🌐',
+    async compute() {
+      const g = BRAIN.state.global;
+      const phase = brainPhase();
+      // US markets set the tone at the Indian open; intraday they mostly lag, so
+      // this only votes in the pre-open / opening phases.
+      const votes = (phase === 'PRE_OPEN' || phase === 'OPENING');
+      if (!g || !g.rows?.length) {
+        return { bias: BIAS.NEUTRAL, confidence: 0, reasoning: g?.error || 'Global feed loading (US-ETF proxies)',
+          data: [{ lbl: 'Status', val: g?.error ? 'UNAVAILABLE' : 'LOADING', cls: 'm' }],
+          formula: '// SPY/QQQ/DIA/GLD/USO/DXY via Finnhub — proxies, not live futures' };
+      }
+      // Risk-on (equities up, dollar down) vs risk-off
+      const eq = g.rows.filter(r => ['SPY','QQQ','DIA'].includes(r.sym));
+      const eqAvg = eq.length ? eq.reduce((s, r) => s + r.chgPct, 0) / eq.length : 0;
+      const dxy = g.rows.find(r => r.sym === 'DXY');
+      let bull = 0, bear = 0;
+      if (votes) {
+        if (eqAvg > 0.3) bull += 30; else if (eqAvg < -0.3) bear += 30;
+        if (dxy) { if (dxy.chgPct < -0.2) bull += 10; else if (dxy.chgPct > 0.2) bear += 10; }
+      }
+      const bias = bull > bear + 10 ? BIAS.BULL : bear > bull + 10 ? BIAS.BEAR : BIAS.NEUTRAL;
+      return {
+        bias, confidence: votes ? Math.min(60, Math.max(bull, bear, 20)) : 0,
+        reasoning: `US equities ${eqAvg >= 0 ? '+' : ''}${eqAvg.toFixed(2)}% (proxy) · DXY ${dxy ? (dxy.chgPct >= 0 ? '+' : '') + dxy.chgPct.toFixed(2) + '%' : '—'}` + (votes ? '' : ' · context only outside pre-open'),
+        data: g.rows.map(r => ({ lbl: r.label, val: (r.chgPct >= 0 ? '+' : '') + r.chgPct.toFixed(2) + '%', cls: r.chgPct > 0 ? 'g' : r.chgPct < 0 ? 'r' : '' })),
+        formula: `risk-on = US equity ETFs up + DXY down\neqAvg ${eqAvg.toFixed(2)}%  votes only in pre-open/opening`
+      };
+    }
+  },
+  {
     id: 'ORDER_FLOW', name: 'ORDER FLOW (LIVE TAPE)', source: 'kite', icon: '⚡',
     async compute(ctx) {
       const of = OrderFlow.compute();
@@ -9527,6 +9558,24 @@ async function brainFetchTick() {
       } else if (BRAIN.state.optionChain) {
         ctx.optionChain = BRAIN.state.optionChain;  // reuse cached
       }
+    }
+
+    // Global cross-asset context — US-ETF proxies via Finnhub, slow cadence.
+    if (Date.now() - (BRAIN.state.globalFetchedAt || 0) > 60000) {
+      try {
+        const gr = await api('finnhub', { action: 'global-data', symbols: ['^GSPC','^IXIC','^DJI','GC=F','CL=F','DX-Y.NYB'] });
+        // Response is keyed by the requested symbol, and change % is `change`.
+        const MAP = { '^GSPC': ['SPY','S&P'], '^IXIC': ['QQQ','Nasdaq'], '^DJI': ['DIA','Dow'],
+                      'GC=F': ['GLD','Gold'], 'CL=F': ['USO','Crude'], 'DX-Y.NYB': ['DXY','DXY'] };
+        const rows = [];
+        const data = gr?.data || gr || {};
+        Object.entries(MAP).forEach(([reqSym, [sym, label]]) => {
+          const v = data[reqSym];
+          if (v && typeof v.change === 'number') rows.push({ sym, label, chgPct: v.change });
+        });
+        BRAIN.state.global = rows.length ? { rows } : { error: 'no global data' };
+        BRAIN.state.globalFetchedAt = Date.now();
+      } catch (e) { BRAIN.state.global = { error: e.message }; }
     }
 
     // Near-month future for the basis panel — refreshed on the slower cadence
