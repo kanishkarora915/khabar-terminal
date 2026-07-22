@@ -9,6 +9,11 @@
 [functions."kite"]
   timeout = 26
 
+[functions."nse"]
+  # BSE forthcoming-results + NSE archives calls can take a few seconds; give the
+  # function more than the 10s default so a slow upstream doesn't get cut off.
+  timeout = 26
+
 [functions."auth"]
   timeout = 15
 

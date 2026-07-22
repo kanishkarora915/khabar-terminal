@@ -7,10 +7,15 @@ const COOKIE_TTL = 60000;
 const cache = {};
 const CACHE_TTL = { quote: 8000, 'option-chain': 10000, indices: 8000, 'index-stocks': 15000, search: 30000, history: 300000, 'event-calendar': 3600000, 'fo-ban': 1800000 };
 
-function httpGet(hostname, path, headers = {}, timeout = 15000) {
+function httpGet(hostname, path, headers = {}, timeout = 15000, extra = {}) {
   return new Promise((resolve, reject) => {
     const opts = {
       hostname, path, method: 'GET',
+      // Some upstreams (notably api.bseindia.com) emit a response header with
+      // trailing whitespace, which Node's strict HTTP parser rejects with
+      // "Unexpected whitespace after header value". Callers can opt into the
+      // lenient parser for those hosts; NSE/Yahoo stay on the strict default.
+      insecureHTTPParser: extra.insecureHTTPParser === true,
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
@@ -53,29 +58,40 @@ function httpGet(hostname, path, headers = {}, timeout = 15000) {
   });
 }
 
+// Raw text fetch (no JSON parse). Used for the archives host (nsearchives.nseindia.com),
+// which serves plain CSV/text with no cookie wall and — unlike www.nseindia.com — is NOT
+// Akamai-blocked from datacenter IPs. Handles gzip/deflate like httpGet.
 function httpGetText(hostname, path, headers = {}, timeout = 10000) {
-  return new Promise((resolve, reject) => {
-    const req = https.request({ hostname, path, method: 'GET', headers: {
-      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-      'Accept': 'text/csv,text/plain,*/*',
-      'Accept-Encoding': 'gzip, deflate',
-      ...headers } }, res => {
+  return new Promise((resolve) => {
+    const opts = {
+      hostname, path, method: 'GET',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+        'Accept': 'text/csv,text/plain,*/*',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept-Encoding': 'gzip, deflate',
+        'Connection': 'keep-alive',
+        ...headers
+      }
+    };
+    const req = https.request(opts, res => {
       const chunks = [];
       res.on('data', c => chunks.push(c));
       res.on('end', () => {
         const buf = Buffer.concat(chunks);
         const enc = res.headers['content-encoding'];
+        let text;
         try {
-          let text;
           if (enc === 'gzip') text = zlib.gunzipSync(buf).toString();
           else if (enc === 'deflate') text = zlib.inflateSync(buf).toString();
           else text = buf.toString();
-          resolve({ text, status: res.statusCode });
-        } catch (e) { resolve({ text: buf.toString(), status: res.statusCode }); }
+        } catch (e) { text = buf.toString(); }
+        if (res.statusCode >= 400) resolve({ text: null, status: res.statusCode, error: 'HTTP ' + res.statusCode });
+        else resolve({ text, status: res.statusCode });
       });
     });
-    req.on('error', e => reject(e));
-    req.setTimeout(timeout, () => { req.destroy(); reject(new Error('Timeout')); });
+    req.on('error', e => resolve({ text: null, status: 0, error: e.message }));
+    req.setTimeout(timeout, () => { req.destroy(); resolve({ text: null, status: 0, error: 'Timeout' }); });
     req.end();
   });
 }
@@ -123,26 +139,6 @@ async function getNSECookies() {
     }
   }
   return '';
-}
-
-// Single-shot fetch with a short timeout. Used for optional/enrichment endpoints
-// (events, ban list) where a slow failure is worse than no data — these must never
-// eat the whole function budget and hang the caller.
-async function nseFetchFast(path, timeout = 6000) {
-  try {
-    const cookies = await getNSECookies();
-    return await httpGet('www.nseindia.com', path, {
-      'Cookie': cookies,
-      'Referer': 'https://www.nseindia.com/companies-listing/corporate-filings-event-calendar',
-      'Accept': 'application/json, text/javascript, */*; q=0.01',
-      'X-Requested-With': 'XMLHttpRequest',
-      'Sec-Fetch-Dest': 'empty',
-      'Sec-Fetch-Mode': 'cors',
-      'Sec-Fetch-Site': 'same-origin',
-    }, timeout);
-  } catch (e) {
-    return { data: null, error: e.message, status: 0 };
-  }
 }
 
 async function nseFetch(path) {
@@ -246,7 +242,8 @@ exports.handler = async (event) => {
           '/BseIndiaAPI/api/Corpforthresults/w?strCat=-1&strType=C',
           { 'Accept': 'application/json',
             'Referer': 'https://www.bseindia.com/',
-            'Origin': 'https://www.bseindia.com' }, 12000).catch(e => ({ data: null, error: e.message }));
+            'Origin': 'https://www.bseindia.com' }, 12000,
+          { insecureHTTPParser: true }).catch(e => ({ data: null, error: e.message }));
 
         const raw = Array.isArray(r?.data) ? r.data : (Array.isArray(r?.data?.Table) ? r.data.Table : null);
         let events = [];
@@ -335,9 +332,14 @@ exports.handler = async (event) => {
     }
 
     if (result.data) {
-      cache[ck] = { data: result.data, ts: Date.now() };
-      const now = Date.now();
-      for (const k in cache) { if (now - cache[k].ts > 600000) delete cache[k]; }
+      // Don't cache a self-reported failure (ok === false) — otherwise a transient
+      // upstream miss on event-calendar/fo-ban gets pinned for the full (long) TTL
+      // and blocks retries. Only successful payloads are worth caching.
+      if (result.data.ok !== false) {
+        cache[ck] = { data: result.data, ts: Date.now() };
+        const now = Date.now();
+        for (const k in cache) { if (now - cache[k].ts > 600000) delete cache[k]; }
+      }
       return { statusCode: 200, headers: H, body: JSON.stringify(result.data) };
     } else {
       return { statusCode: 502, headers: H, body: JSON.stringify({ error: result.error || 'NSE fetch failed', status: result.status, snippet: result.snippet || '' }) };
