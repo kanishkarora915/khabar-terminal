@@ -1,5 +1,5 @@
 // KHABAR Service Worker — PWA Support v5.1 (Real IV + NFO symbols + live auto-P&L)
-const CACHE_NAME = 'khabar-v40-leanboot';
+const CACHE_NAME = 'khabar-v41-logincb';
 const STATIC_ASSETS = [
   '/icon.svg',
   '/icon-192.png',
@@ -38,8 +38,18 @@ self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
   // API calls — always network, never cache
-  if (url.pathname.startsWith('/.netlify/functions/')) {
+  if (url.pathname.startsWith('/.netlify/functions/') || url.pathname.startsWith('/store/') || url.pathname === '/healthz') {
     event.respondWith(fetch(event.request));
+    return;
+  }
+
+  // The Zerodha login redirect comes back as /?request_token=...  It must NEVER
+  // be served from cache — a stale entry here shows a blank page after login.
+  // Always go to network and fall back to a clean index.html, never a cached URL.
+  if (url.searchParams.has('request_token')) {
+    event.respondWith(
+      fetch(event.request).catch(() => caches.match('/index.html') || fetch('/index.html'))
+    );
     return;
   }
 
