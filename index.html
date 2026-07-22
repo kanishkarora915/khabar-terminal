@@ -8455,6 +8455,206 @@ document.addEventListener('visibilitychange', async () => {
 // "Naked machine" — every calculation visible, every source labelled
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// KITE TAPE — live tick + full order-book depth over WebSocket
+//
+// Everything else in the app polls REST every few seconds, so it sees a photo of
+// positioning. This opens Zerodha's binary tick stream (wss://ws.kite.trade) and
+// subscribes in "full" mode, which streams last price, cumulative volume, OI and
+// the 5-level bid/ask depth as trades happen — the actual tape, not a snapshot.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Pure binary parser (kept separate so it can be unit-tested off a constructed
+// buffer). Kite frames: [int16 packet-count][int16 len][packet]…  Each packet is
+// LTP (8B) / quote (44B) / full (184B, includes 5+5 depth). Prices are in paise.
+function parseKiteBinary(buffer) {
+  const dv = new DataView(buffer);
+  const out = [];
+  if (dv.byteLength < 2) return out;
+  const count = dv.getInt16(0);
+  let pos = 2;
+  for (let i = 0; i < count; i++) {
+    if (pos + 2 > dv.byteLength) break;
+    const len = dv.getInt16(pos); pos += 2;
+    if (pos + len > dv.byteLength) break;
+    const p = pos; pos += len;
+    const t = { token: dv.getInt32(p) };
+    const div = 100;   // NSE/NFO price divisor (paise → rupees)
+    if (len >= 8)  t.ltp = dv.getInt32(p + 4) / div;
+    if (len >= 44) {
+      t.lastQty   = dv.getInt32(p + 8);
+      t.avgPrice  = dv.getInt32(p + 12) / div;
+      t.volume    = dv.getInt32(p + 16);
+      t.buyQty    = dv.getInt32(p + 20);
+      t.sellQty   = dv.getInt32(p + 24);
+      t.open      = dv.getInt32(p + 28) / div;
+      t.high      = dv.getInt32(p + 32) / div;
+      t.low       = dv.getInt32(p + 36) / div;
+      t.close     = dv.getInt32(p + 40) / div;
+    }
+    if (len >= 64) {
+      t.oi        = dv.getInt32(p + 48);
+      t.oiDayHigh = dv.getInt32(p + 52);
+      t.oiDayLow  = dv.getInt32(p + 56);
+    }
+    if (len >= 184) {
+      // 10 depth entries × 12 bytes: qty(4) price(4) orders(2) pad(2). First 5 = bids.
+      const bids = [], asks = [];
+      for (let d = 0; d < 10; d++) {
+        const off = p + 64 + d * 12;
+        const entry = { qty: dv.getInt32(off), price: dv.getInt32(off + 4) / div, orders: dv.getInt16(off + 8) };
+        (d < 5 ? bids : asks).push(entry);
+      }
+      t.depth = { bids, asks };
+    }
+    out.push(t);
+  }
+  return out;
+}
+
+const KiteTape = {
+  ws: null,
+  connected: false,
+  tokens: [],                 // subscribed instrument tokens
+  ticks: {},                  // token -> latest parsed tick
+  hist: {},                   // token -> [{ts, ltp, vol}] rolling for momentum
+  lastMsgAt: 0,
+  reconnectTimer: null,
+  meta: {},                   // token -> {label, kind} for readability
+
+  connect(tokenMeta) {
+    if (!APP.kite?.api_key || !APP.kite?.access_token) return false;
+    this.disconnect();
+    this.meta = tokenMeta || {};
+    this.tokens = Object.keys(tokenMeta || {}).map(Number).filter(Boolean);
+    if (!this.tokens.length) return false;
+    const url = `wss://ws.kite.trade?api_key=${encodeURIComponent(APP.kite.api_key)}&access_token=${encodeURIComponent(APP.kite.access_token)}`;
+    try {
+      const ws = new WebSocket(url);
+      ws.binaryType = 'arraybuffer';
+      this.ws = ws;
+      ws.onopen = () => {
+        this.connected = true;
+        ws.send(JSON.stringify({ a: 'subscribe', v: this.tokens }));
+        ws.send(JSON.stringify({ a: 'mode', v: ['full', this.tokens] }));
+      };
+      ws.onmessage = (e) => {
+        if (typeof e.data === 'string') return;   // heartbeat / text frames
+        this.lastMsgAt = Date.now();
+        const ticks = parseKiteBinary(e.data);
+        ticks.forEach(t => {
+          this.ticks[t.token] = { ...this.ticks[t.token], ...t, at: Date.now() };
+          const h = this.hist[t.token] = this.hist[t.token] || [];
+          if (t.ltp != null) { h.push({ ts: Date.now(), ltp: t.ltp, vol: t.volume || 0 }); if (h.length > 60) h.shift(); }
+        });
+      };
+      ws.onclose = () => { this.connected = false; this._scheduleReconnect(); };
+      ws.onerror = () => { this.connected = false; };
+      return true;
+    } catch (e) { console.warn('[TAPE] connect failed', e); return false; }
+  },
+
+  _scheduleReconnect() {
+    clearTimeout(this.reconnectTimer);
+    // only if we're on a page that wants the tape and still logged in
+    this.reconnectTimer = setTimeout(() => {
+      if (APP.kite?.active && this.tokens.length) this.connect(this.meta);
+    }, 5000);
+  },
+
+  disconnect() {
+    clearTimeout(this.reconnectTimer);
+    if (this.ws) { try { this.ws.close(); } catch (e) {} this.ws = null; }
+    this.connected = false;
+  },
+
+  isLive() { return this.connected && (Date.now() - this.lastMsgAt) < 8000; },
+  get(token) { return this.ticks[token] || null; }
+};
+
+// ─── Order Flow engine ──────────────────────────────────────────────────────────
+// Turns the raw tape into the "what's happening right now" read that REST can't
+// give: which side the book is stacked, whether prints are hitting the bid or
+// lifting the offer, and how fast volume is arriving.
+const OrderFlow = {
+  // token roles are set when BRAIN subscribes: { fut, ce, pe }
+  roles: {},
+
+  // depth imbalance across the 5 levels — >0 means bids outweigh asks (buy pressure)
+  depthImbalance(tick) {
+    if (!tick?.depth) return null;
+    const b = tick.depth.bids.reduce((s, x) => s + x.qty, 0);
+    const a = tick.depth.asks.reduce((s, x) => s + x.qty, 0);
+    if (b + a === 0) return null;
+    return { bidQty: b, askQty: a, imbalance: (b - a) / (b + a) };   // -1..+1
+  },
+
+  // last print vs the touch: at/above ask = buyer aggressor, at/below bid = seller
+  aggressor(tick) {
+    if (!tick?.depth || tick.ltp == null) return null;
+    const bestBid = tick.depth.bids[0]?.price, bestAsk = tick.depth.asks[0]?.price;
+    if (!bestBid || !bestAsk) return null;
+    if (tick.ltp >= bestAsk) return 'BUYER';
+    if (tick.ltp <= bestBid) return 'SELLER';
+    return 'MID';
+  },
+
+  // volume arriving per second over the recent tick history
+  volumeVelocity(token) {
+    const h = KiteTape.hist[token];
+    if (!h || h.length < 3) return null;
+    const first = h[0], last = h[h.length - 1];
+    const secs = (last.ts - first.ts) / 1000;
+    return secs > 0 ? (last.vol - first.vol) / secs : null;
+  },
+
+  // tick momentum: net upticks − downticks over recent history
+  tickMomentum(token) {
+    const h = KiteTape.hist[token];
+    if (!h || h.length < 4) return null;
+    let up = 0, dn = 0;
+    for (let i = 1; i < h.length; i++) {
+      if (h[i].ltp > h[i-1].ltp) up++; else if (h[i].ltp < h[i-1].ltp) dn++;
+    }
+    const tot = up + dn;
+    return tot ? (up - dn) / tot : 0;   // -1..+1
+  },
+
+  // Directional read from the FUTURE's tape (cleanest proxy for the underlying).
+  compute() {
+    if (!KiteTape.isLive() || !this.roles.fut) {
+      return { ok: false, bias: 'NEUTRAL', reason: KiteTape.connected ? 'waiting for ticks' : 'tape not connected' };
+    }
+    const fut = KiteTape.get(this.roles.fut);
+    if (!fut) return { ok: false, bias: 'NEUTRAL', reason: 'no future tick yet' };
+
+    const di = this.depthImbalance(fut);
+    const mom = this.tickMomentum(this.roles.fut);
+    const agg = this.aggressor(fut);
+    const vv = this.volumeVelocity(this.roles.fut);
+
+    // CE vs PE where the volume is going (option-side confirmation)
+    let optSkew = null;
+    if (this.roles.ce && this.roles.pe) {
+      const ceVV = this.volumeVelocity(this.roles.ce), peVV = this.volumeVelocity(this.roles.pe);
+      if (ceVV != null && peVV != null && (ceVV + peVV) > 0) optSkew = (ceVV - peVV) / (ceVV + peVV);
+    }
+
+    let bull = 0, bear = 0;
+    if (di) { if (di.imbalance > 0.15) bull += 30; else if (di.imbalance < -0.15) bear += 30; }
+    if (mom != null) { if (mom > 0.2) bull += 25; else if (mom < -0.2) bear += 25; }
+    if (agg === 'BUYER') bull += 20; else if (agg === 'SELLER') bear += 20;
+    if (optSkew != null) { if (optSkew > 0.2) bull += 15; else if (optSkew < -0.2) bear += 15; }
+
+    const bias = bull > bear + 15 ? BIAS.BULL : bear > bull + 15 ? BIAS.BEAR : BIAS.NEUTRAL;
+    return {
+      ok: true, bias, confidence: Math.min(90, Math.max(bull, bear, 25)),
+      depthImbalance: di, tickMomentum: mom, aggressor: agg, volumeVelocity: vv, optSkew,
+      reason: `book ${di ? (di.imbalance >= 0 ? '+' : '') + (di.imbalance*100).toFixed(0) + '% bid' : '—'} · ticks ${mom != null ? (mom>=0?'+':'')+(mom*100).toFixed(0)+'%' : '—'} · last print ${agg || '—'}`
+    };
+  }
+};
+
 const BRAIN = {
   version: '2.0.0',
   index: 'NIFTY',
@@ -9211,6 +9411,33 @@ const PANELS = [
         formula: `GEX_peak = argmax( Σ OI × weight[k] ) = ${peakStrike}\npin_dist = |spot - peak| / spot × 100 = ${pinDistPct.toFixed(2)}%\ndefense: CE_Δ>0 AND PE_Δ>0 same strike\n→ ${bias} @ conf ${conf}`
       };
     }
+  },
+  {
+    id: 'ORDER_FLOW', name: 'ORDER FLOW (LIVE TAPE)', source: 'kite', icon: '⚡',
+    async compute(ctx) {
+      const of = OrderFlow.compute();
+      if (!of.ok) {
+        return { bias: BIAS.NEUTRAL, confidence: 0, reasoning: of.reason,
+          data: [
+            { lbl: 'Tape', val: KiteTape.connected ? 'CONNECTED' : 'OFFLINE', cls: KiteTape.connected ? 'g' : 'm' },
+            { lbl: 'Live', val: KiteTape.isLive() ? 'YES' : 'NO', cls: KiteTape.isLive() ? 'g' : 'm' },
+            { lbl: 'Ticks', val: Object.keys(KiteTape.ticks).length }
+          ],
+          formula: '// live only during market hours — reads wss://ws.kite.trade' };
+      }
+      const di = of.depthImbalance;
+      return {
+        bias: of.bias, confidence: of.confidence, reasoning: of.reason,
+        data: [
+          { lbl: 'Book imbalance', val: di ? (di.imbalance >= 0 ? '+' : '') + (di.imbalance*100).toFixed(0) + '% bid' : '—', cls: di && di.imbalance > 0.1 ? 'g' : di && di.imbalance < -0.1 ? 'r' : '' },
+          { lbl: 'Bid / Ask qty', val: di ? bfmtCr(di.bidQty) + ' / ' + bfmtCr(di.askQty) : '—' },
+          { lbl: 'Tick momentum', val: of.tickMomentum != null ? (of.tickMomentum >= 0 ? '+' : '') + (of.tickMomentum*100).toFixed(0) + '%' : '—', cls: of.tickMomentum > 0.1 ? 'g' : of.tickMomentum < -0.1 ? 'r' : '' },
+          { lbl: 'Last print', val: of.aggressor || '—', cls: of.aggressor === 'BUYER' ? 'g' : of.aggressor === 'SELLER' ? 'r' : '' },
+          { lbl: 'CE vs PE flow', val: of.optSkew != null ? (of.optSkew >= 0 ? 'CE +' : 'PE +') + Math.abs(of.optSkew*100).toFixed(0) + '%' : '—', cls: of.optSkew > 0.1 ? 'g' : of.optSkew < -0.1 ? 'r' : '' }
+        ],
+        formula: `imbalance = (bidQty − askQty)/(bidQty + askQty)\nmomentum = (upticks − downticks)/ticks\naggressor = print ≥ ask ? BUYER : print ≤ bid ? SELLER\n→ ${of.bias} @ ${of.confidence}`
+      };
+    }
   }
 ];
 
@@ -9318,6 +9545,29 @@ async function brainFetchTick() {
     }
   } catch (e) { console.warn('[BRAIN] fetch tick err:', e); }
   return ctx;
+}
+
+// Keep the tape subscribed to the tokens that matter right now: the near future
+// and the ATM call/put. Re-subscribes only when the ATM strike moves, not every tick.
+function brainUpdateTape(ctx) {
+  const chain = ctx.optionChain, spot = ctx.underlying?.last_price, fut = ctx.future || BRAIN.state.future;
+  if (!chain?.strikes?.length || !spot) return;
+  const step = BRAIN.indexMap[BRAIN.index].step;
+  const atm = Math.round(spot / step) * step;
+  const atmRow = chain.strikes.find(r => r.strikePrice === atm);
+  const futTok = fut?.instrument_token;
+  const ceTok = atmRow?.CE?.instrumentToken;
+  const peTok = atmRow?.PE?.instrumentToken;
+  const meta = {};
+  if (futTok) meta[futTok] = { label: BRAIN.index + ' FUT', kind: 'fut' };
+  if (ceTok)  meta[ceTok]  = { label: atm + ' CE', kind: 'ce' };
+  if (peTok)  meta[peTok]  = { label: atm + ' PE', kind: 'pe' };
+  const wanted = Object.keys(meta).map(Number).sort().join(',');
+  const have = KiteTape.tokens.slice().sort().join(',');
+  if (wanted && wanted !== have) {
+    OrderFlow.roles = { fut: futTok || null, ce: ceTok || null, pe: peTok || null };
+    KiteTape.connect(meta);
+  }
 }
 
 // ─── Conductor ──────────────────────────────────────────────────────────────
@@ -9488,6 +9738,12 @@ async function brainTick() {
   BRAIN.state.underlying = ctx.underlying;
   BRAIN.state.otherQuotes = ctx.otherQuotes || {};
   BRAIN.state.futureLive = ctx.future || null;
+
+  // Subscribe the live tape to the near future + ATM CE/PE of the current chain.
+  // Only on the BRAIN tab — the tick stream is a real socket, no point holding it
+  // open in the background.
+  if (APP.page === 'brain') brainUpdateTape(ctx);
+  else if (KiteTape.connected) KiteTape.disconnect();
   BRAIN.state.prevVix = BRAIN.state.vix;
   BRAIN.state.vix = ctx.vix;
 

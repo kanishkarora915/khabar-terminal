@@ -517,6 +517,7 @@ exports.handler = async (event) => {
         const quote = q?.data ? Object.values(q.data)[0] : null;
         result = { data: quote ? {
           tradingsymbol: near.tradingsymbol,
+          instrument_token: near.instrument_token,
           expiry: near.expiry,
           last_price: quote.last_price,
           oi: quote.oi || 0,
