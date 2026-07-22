@@ -2041,6 +2041,20 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
           <span>THETA/HR <span id="brain-theta" style="color:var(--y);font-weight:700">—</span></span>
           <span>HOLD MAX <span id="brain-hold" style="color:var(--t);font-weight:700">—</span></span>
         </div>
+        <!-- BUYER MATH — the numbers a CE/PE buyer actually decides on -->
+        <div id="brain-buyer-math" style="display:none;margin-top:8px;padding:8px 10px;background:var(--bg);border:1px solid var(--bd);border-radius:3px">
+          <div style="font-family:var(--f2);font-size:9px;color:var(--m);letter-spacing:1.5px;margin-bottom:5px">BUYER MATH</div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(115px,1fr));gap:8px;font-family:var(--f2);font-size:10px">
+            <div><span style="color:var(--m)">Breakeven</span><br><span id="bm-be" style="color:var(--t);font-weight:700">—</span></div>
+            <div><span style="color:var(--m)">Expected move</span><br><span id="bm-em" style="color:var(--a);font-weight:700">—</span></div>
+            <div><span style="color:var(--m)">Target reachable</span><br><span id="bm-reach" style="color:var(--t);font-weight:700">—</span></div>
+            <div><span style="color:var(--m)">Prob of profit</span><br><span id="bm-pop" style="color:var(--t);font-weight:700">—</span></div>
+            <div><span style="color:var(--m)">Theta/day</span><br><span id="bm-theta" style="color:var(--y);font-weight:700">—</span></div>
+            <div><span style="color:var(--m)">Real R:R</span><br><span id="bm-rr" style="color:var(--g);font-weight:700">—</span></div>
+            <div><span style="color:var(--m)">IV skew</span><br><span id="bm-skew" style="color:var(--t);font-weight:700">—</span></div>
+            <div><span style="color:var(--m)">Alternatives</span><br><span id="bm-alts" style="color:var(--m);font-weight:700">—</span></div>
+          </div>
+        </div>
       </div>
       <div class="brain-confidence-big">
         <div class="brain-conf-lbl">CONFIDENCE</div>
@@ -9367,42 +9381,50 @@ const Conductor = {
 
 // ─── Strike Selector (buyer logic) ──────────────────────────────────────────
 function brainSelectStrike(direction, confidence, chain, spot) {
-  if (!chain?.strikes?.length || !spot) return null;
-  const step = BRAIN.indexMap[BRAIN.index].step;
-  const atm = Math.round(spot / step) * step;
-  const hour = new Date().getHours();
+  if (!chain?.strikes?.length || !spot || direction === BIAS.NEUTRAL) return null;
+  const isCall = direction === BIAS.BULL;
+  const side = isCall ? 'CE' : 'PE';
 
-  let targetStrike = atm;
-  if (confidence >= 85 && hour < 12) targetStrike = direction === BIAS.BULL ? atm : atm;             // ATM max gamma
-  else if (confidence >= 70)         targetStrike = atm;                                              // ATM balanced
-  else if (confidence >= 60)         targetStrike = direction === BIAS.BULL ? atm - step : atm + step; // ITM 1 (higher delta)
-
-  const row = chain.strikes.find(r => r.strikePrice === targetStrike);
-  const side = direction === BIAS.BULL ? 'CE' : 'PE';
-  const opt = row?.[side];
-  if (!opt) return { strike: targetStrike, side, note: 'strike not in chain' };
-
-  // Same gate and IV-scaled levels the stock side uses — index trades are more
-  // frequent, so the weaker inline check here was the wrong way round.
-  const liqInfo = strikeLiquidity(opt);
-  const liq = liqInfo.tradable;
-  const bidask = liqInfo.spreadPct ?? 0;
+  // Delta-aware, expected-move-aware pick instead of the old ATM/ITM-1 heuristic.
+  const sel = smartStrikeSelect(chain, spot, direction, confidence);
+  if (!sel?.best) return null;
+  const { best, expectedMove } = sel;
+  const opt = best.opt;
   const ltp = opt.lastPrice;
-  const lv = ivScaledLevels(ltp, opt.impliedVolatility || 0);
-  const target1 = lv.target;
-  const target2 = ltp + (lv.target - ltp) * 1.8;
-  const sl = lv.sl;
+  const liqInfo = best.liq;
+  const a = best.analysis;
+
+  // Underlying levels the trade is aimed at: one expected-move sigma to target,
+  // 0.6σ against. Option target/SL are the PROJECTED premiums at those spots.
+  const sigma = expectedMove ? expectedMove.oneSigma : spot * 0.02;
+  const targetSpot = spot + (isCall ? 1 : -1) * sigma;
+  const slSpot     = spot - (isCall ? 1 : -1) * sigma * 0.6;
+  const projT = OptionsMath.projectValue(opt, spot, targetSpot, opt.daysToExpiry <= 1 ? 0.3 : 1, isCall);
+  const projS = OptionsMath.projectValue(opt, spot, slSpot,     opt.daysToExpiry <= 1 ? 0.3 : 1, isCall);
+  const target1 = projT != null ? Math.max(projT, ltp * 1.05) : ltp * 1.5;
+  const sl      = projS != null ? Math.min(projS, ltp * 0.9)  : ltp * 0.6;
 
   return {
-    strike: targetStrike, side, symbol: BRAIN.index + ' ' + targetStrike + ' ' + side,
+    strike: best.row.strikePrice, side, symbol: BRAIN.index + ' ' + best.row.strikePrice + ' ' + side,
     kiteSymbol: opt.kiteSymbol || null, lotSize: opt.lotSize || 0,
     theta: opt.theta ?? null, gamma: opt.gamma ?? null, vega: opt.vega ?? null,
     daysToExpiry: opt.daysToExpiry ?? null, expiryDate: opt.expiryDate ?? null,
-    ltp, iv: opt.impliedVolatility, oi: opt.openInterest, delta: opt.delta || null,
+    ltp, iv: opt.impliedVolatility, oi: opt.openInterest, delta: opt.delta ?? null,
+    moneyness: best.moneyness, archetype: sel.archetype,
     entryLow: (ltp * 0.98).toFixed(2), entryHigh: (ltp * 1.02).toFixed(2),
-    target1: target1.toFixed(2), target2: target2.toFixed(2), sl: sl.toFixed(2),
-    liquidityOK: liq, liqGrade: liqInfo.grade, liqReasons: liqInfo.reasons,
-    bidaskPct: Number(bidask).toFixed(2), levelBasis: lv.basis
+    target1: target1.toFixed(2), target2: (ltp + (target1 - ltp) * 1.7).toFixed(2), sl: sl.toFixed(2),
+    liquidityOK: liqInfo.tradable, liqGrade: liqInfo.grade, liqReasons: liqInfo.reasons,
+    bidaskPct: (liqInfo.spreadPct ?? 0).toFixed(2),
+    // buyer math for the UI
+    breakeven: a.breakeven, breakevenMovePct: a.breakevenMovePct,
+    expectedMovePct: expectedMove ? expectedMove.oneSigmaPct : null,
+    reachable: a.reachable, pop: a.pop, thetaDecay: a.thetaDecay, skew: a.skew,
+    projRR: a.projRR, targetSpot, slSpot,
+    levelBasis: `Δ${(Math.abs(opt.delta||0)).toFixed(2)} · ${best.moneyness} · projected payoff`,
+    alternatives: sel.alternatives.map(alt => ({
+      strike: alt.row.strikePrice, moneyness: alt.moneyness, delta: alt.opt.delta,
+      ltp: alt.opt.lastPrice, score: alt.score, grade: alt.liq.grade
+    }))
   };
 }
 
@@ -9649,12 +9671,37 @@ const BrainRender = {
       $('brain-entry').textContent = '₹' + c.strike.entryLow + '-' + c.strike.entryHigh;
       $('brain-target').textContent = '₹' + c.strike.target1 + ' / ₹' + c.strike.target2;
       $('brain-sl').textContent = '₹' + c.strike.sl;
+
+      // Buyer math panel
+      const bm = $('brain-buyer-math'), s = c.strike;
+      if (bm) {
+        bm.style.display = '';
+        const be = s.breakeven, bePct = s.breakevenMovePct;
+        $('bm-be').textContent = be != null ? bfmt(be, 0) + (bePct != null ? ' (' + (bePct >= 0 ? '+' : '') + bePct.toFixed(2) + '%)' : '') : '—';
+        $('bm-em').textContent = s.expectedMovePct != null ? '±' + s.expectedMovePct.toFixed(2) + '% by expiry' : '—';
+        const reachEl = $('bm-reach');
+        reachEl.textContent = s.reachable || '—';
+        reachEl.style.color = s.reachable === 'within 1σ' ? 'var(--g)' : (s.reachable || '').includes('stretch') ? 'var(--y)' : 'var(--r)';
+        const pop = s.pop;
+        $('bm-pop').textContent = pop ? (pop.deltaPOP != null ? pop.deltaPOP.toFixed(0) + '% (Δ)' : '') + (pop.bePOP != null ? ' · ' + pop.bePOP.toFixed(0) + '% (BE)' : '') : '—';
+        $('bm-theta').textContent = s.thetaDecay ? '₹' + (s.thetaDecay.perDay * (s.lotSize || 1)).toFixed(0) + '/lot (' + s.thetaDecay.perDayPct.toFixed(1) + '%)' : '—';
+        const rrEl = $('bm-rr');
+        rrEl.textContent = s.projRR != null ? '1:' + s.projRR.toFixed(2) : '—';
+        rrEl.style.color = (s.projRR || 0) >= 1.5 ? 'var(--g)' : (s.projRR || 0) >= 1 ? 'var(--y)' : 'var(--r)';
+        const skewEl = $('bm-skew');
+        skewEl.textContent = s.skew ? s.skew.verdict + ' (' + (s.skew.diff >= 0 ? '+' : '') + s.skew.diff.toFixed(1) + 'pp)' : '—';
+        skewEl.style.color = s.skew?.verdict === 'CHEAP' ? 'var(--g)' : s.skew?.verdict === 'RICH' ? 'var(--r)' : 'var(--t)';
+        $('bm-alts').textContent = (s.alternatives && s.alternatives.length)
+          ? s.alternatives.map(a => a.strike + a.moneyness.charAt(0)).join(' · ')
+          : 'none';
+      }
     } else {
       strike.textContent = '—';
       sub.textContent = 'No qualifying setup right now';
       $('brain-entry').textContent = '—';
       $('brain-target').textContent = '—';
       $('brain-sl').textContent = '—';
+      const bm = $('brain-buyer-math'); if (bm) bm.style.display = 'none';
     }
 
     confNum.textContent = c.confidence + '%';
@@ -12357,15 +12404,23 @@ function stockDeepDiveRenderPicker() {
   const side = bias === 'BULL' ? 'CE' : 'PE';
 
   // ATM ±4 strikes by index (works for any strike spacing, unlike a fixed rupee window)
+  const isCall = side === 'CE';
+  const em = OptionsMath.expectedMove(spot, atmRow[side]?.impliedVolatility || 15, atmRow[side]?.daysToExpiry ?? 5);
+  const sig = em ? em.oneSigma : spot * 0.02;
+  const tgtSpot = spot + (isCall ? 1 : -1) * sig;
+  const slSpot  = spot - (isCall ? 1 : -1) * sig * 0.6;
   const all = strikes.slice(Math.max(0, atmIdx - 4), atmIdx + 5).map(s => {
     const o = s[side] || {};
     const isATM = s.strikePrice === atm;
     const type = isATM ? 'ATM' : (side === 'CE' ? (s.strikePrice > spot ? 'OTM' : 'ITM') : (s.strikePrice < spot ? 'OTM' : 'ITM'));
+    // full buyer math per strike (breakeven, POP, projected R:R, theta, skew)
+    const analysis = o.lastPrice ? OptionsMath.analyzeStrike(o, spot, isCall, tgtSpot, slSpot, (o.daysToExpiry ?? 5) <= 1 ? 0.3 : 1, c) : null;
     return {
       strike: s.strikePrice, ltp: o.lastPrice || 0, iv: o.impliedVolatility || 0,
-      oi: o.openInterest || 0, type, liq: strikeLiquidity(o)
+      oi: o.openInterest || 0, delta: o.delta ?? null, type, liq: strikeLiquidity(o), a: analysis
     };
   }).filter(p => p.ltp > 0);
+  STOCK_DEEP.expectedMovePct = em ? em.oneSigmaPct : null;
 
   const tradable = all.filter(p => p.liq.tradable);
   const blocked  = all.filter(p => !p.liq.tradable);
@@ -12385,14 +12440,30 @@ function stockDeepDiveRenderPicker() {
   }
 
   const gradeColor = g => g === 'GOOD' ? 'var(--g)' : g === 'FAIR' ? 'var(--y)' : g === 'UNKNOWN' ? 'var(--m)' : 'var(--r)';
-  const rowHtml = p => `
-    <div class="sd-strike-row" ${p.liq.tradable ? `onclick="stockDeepDiveSelectStrike(${p.strike}, '${side}', ${p.ltp}, this)"` : 'style="opacity:.4;cursor:not-allowed"'} title="${p.liq.reasons.join(' · ')}">
-      <span style="color:var(--m);font-size:10px">${p.type}</span>
-      <span style="color:var(--t);font-weight:700">${p.strike} ${side}</span>
-      <span style="color:var(--y);font-size:10px">IV ${p.iv > 0 ? p.iv.toFixed(1) + '%' : '—'}</span>
-      <span style="color:${gradeColor(p.liq.grade)};font-size:9px;font-weight:700">${p.liq.grade}${p.liq.spreadPct !== null ? ' ' + p.liq.spreadPct.toFixed(0) + '%' : ''}</span>
-      <span style="color:${side === 'CE' ? 'var(--g)' : 'var(--r)'};font-weight:700">₹${bfmt(p.ltp, 2)}</span>
+  const rowHtml = p => {
+    const a = p.a;
+    const bePct = a?.breakevenMovePct;
+    const pop = a?.pop?.deltaPOP;
+    const rr = a?.projRR;
+    const thPct = a?.thetaDecay?.perDayPct;
+    const reach = a?.reachable;
+    return `
+    <div class="sd-strike-row" style="display:block;padding:7px 10px${p.liq.tradable ? '' : ';opacity:.4;cursor:not-allowed'}" ${p.liq.tradable ? `onclick="stockDeepDiveSelectStrike(${p.strike}, '${side}', ${p.ltp}, this)"` : ''} title="${p.liq.reasons.join(' · ')}">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span><span style="color:var(--m);font-size:9px">${p.type}</span> <span style="color:var(--t);font-weight:700">${p.strike} ${side}</span>
+          ${p.delta != null ? `<span style="color:var(--m);font-size:9px"> Δ${Math.abs(p.delta).toFixed(2)}</span>` : ''}</span>
+        <span style="color:${side === 'CE' ? 'var(--g)' : 'var(--r)'};font-weight:700">₹${bfmt(p.ltp, 2)}</span>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:3px;font-size:9px;color:var(--m);flex-wrap:wrap">
+        ${bePct != null ? `<span>BE ${bePct >= 0 ? '+' : ''}${bePct.toFixed(2)}%</span>` : ''}
+        ${reach ? `<span style="color:${reach === 'within 1σ' ? 'var(--g)' : reach.includes('stretch') ? 'var(--y)' : 'var(--r)'}">${reach}</span>` : ''}
+        ${pop != null ? `<span>POP ${pop.toFixed(0)}%</span>` : ''}
+        ${rr != null ? `<span style="color:${rr >= 1.5 ? 'var(--g)' : rr >= 1 ? 'var(--y)' : 'var(--r)'}">R:R 1:${rr.toFixed(1)}</span>` : ''}
+        ${thPct != null ? `<span>θ ${thPct.toFixed(1)}%/d</span>` : ''}
+        <span style="color:${gradeColor(p.liq.grade)};font-weight:700">${p.liq.grade}</span>
+      </div>
     </div>`;
+  };
 
   $('sd-picker-list').innerHTML =
     tradable.map(rowHtml).join('') +
@@ -12400,6 +12471,233 @@ function stockDeepDiveRenderPicker() {
       <div style="font-family:var(--f2);font-size:9px;color:var(--r);letter-spacing:1.5px;margin-bottom:4px">🚫 BLOCKED BY LIQUIDITY GATE (${blocked.length})</div>
       ${blocked.map(rowHtml).join('')}
     </div>` : '');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// OPTIONS BUYER MATH
+// The chain already carries delta/gamma/theta/vega/IV/DTE per leg. This turns
+// those into the numbers a buyer actually decides on: how far the underlying has
+// to move, by when, with what odds, and what the option is really worth if it
+// gets there — instead of a flat "premium × 1.6" target.
+// ═══════════════════════════════════════════════════════════════════════════════
+const OptionsMath = {
+  R: 0.065,   // risk-free rate
+
+  _normCDF(x) {
+    const a1=0.254829592,a2=-0.284496736,a3=1.421413741,a4=-1.453152027,a5=1.061405429,p=0.3275911;
+    const s = x < 0 ? -1 : 1; x = Math.abs(x) / Math.SQRT2;
+    const t = 1 / (1 + p * x);
+    const y = 1 - (((((a5*t+a4)*t)+a3)*t+a2)*t+a1) * t * Math.exp(-x*x);
+    return 0.5 * (1 + s * y);
+  },
+
+  // Black-Scholes price for repricing an option at a hypothetical spot / time.
+  bsPrice(S, K, Tyears, sigmaPct, isCall) {
+    if (Tyears <= 0 || sigmaPct <= 0) return Math.max(0, isCall ? S - K : K - S);
+    const sig = sigmaPct / 100, sq = Math.sqrt(Tyears);
+    const d1 = (Math.log(S / K) + (this.R + sig*sig/2) * Tyears) / (sig * sq);
+    const d2 = d1 - sig * sq;
+    return isCall
+      ? S * this._normCDF(d1) - K * Math.exp(-this.R*Tyears) * this._normCDF(d2)
+      : K * Math.exp(-this.R*Tyears) * this._normCDF(-d2) - S * this._normCDF(-d1);
+  },
+
+  // Where the underlying must be AT EXPIRY for the buyer to break even.
+  breakeven(strike, premium, isCall) {
+    return isCall ? strike + premium : strike - premium;
+  },
+
+  // % move in the underlying required to reach breakeven — a buyer's first check.
+  breakevenMovePct(spot, strike, premium, isCall) {
+    if (!spot) return null;
+    const be = this.breakeven(strike, premium, isCall);
+    return ((be - spot) / spot) * 100;   // signed: + for CE, − for PE
+  },
+
+  // 1σ expected move implied by IV over the life of the option, plus per-day.
+  // This is the honest yardstick for "is my target reachable in time".
+  expectedMove(spot, ivPct, daysToExpiry) {
+    if (!spot || !ivPct || daysToExpiry == null) return null;
+    const T = Math.max(daysToExpiry, 0.5) / 365;
+    const oneSigma = spot * (ivPct / 100) * Math.sqrt(T);           // by expiry
+    const daily = spot * (ivPct / 100) * Math.sqrt(1 / 365);        // one trading day
+    return { oneSigma, daily, oneSigmaPct: (oneSigma / spot) * 100, dailyPct: (daily / spot) * 100 };
+  },
+
+  // Reprice the option if the underlying reaches `targetSpot` after `daysHeld`.
+  // Uses full BS so it captures delta + gamma + theta together, not a linear
+  // approximation that overstates OTM payoffs.
+  projectValue(opt, spot, targetSpot, daysHeld, isCall) {
+    const dte = opt.daysToExpiry;
+    const iv = opt.impliedVolatility;
+    if (dte == null || !iv) return null;
+    const Tleft = Math.max(dte - daysHeld, 0) / 365;
+    return this.bsPrice(targetSpot, opt.strikePrice, Tleft, iv, isCall);
+  },
+
+  // Probability the option finishes in the money.
+  //  - deltaPOP: |delta| is the market's own risk-neutral estimate of finishing ITM.
+  //  - bePOP: chance the underlying travels at least to breakeven, from the
+  //           IV-implied distribution (normal on log space, simplified).
+  probOfProfit(opt, spot, isCall) {
+    const out = { deltaPOP: null, bePOP: null };
+    if (opt.delta != null) out.deltaPOP = Math.min(100, Math.abs(opt.delta) * 100);
+    const em = this.expectedMove(spot, opt.impliedVolatility, opt.daysToExpiry);
+    if (em && em.oneSigma > 0) {
+      const be = this.breakeven(opt.strikePrice, opt.lastPrice, isCall);
+      const z = (be - spot) / em.oneSigma;                 // std devs to breakeven
+      // chance of moving BEYOND breakeven in the option's favour
+      out.bePOP = (isCall ? (1 - this._normCDF(z)) : this._normCDF(z)) * 100;
+    }
+    return out;
+  },
+
+  // Theta bleed in the terms a buyer feels it.
+  thetaDecay(opt) {
+    if (opt.theta == null || !opt.lastPrice) return null;
+    const perDay = Math.abs(opt.theta);
+    const perDayPct = (perDay / opt.lastPrice) * 100;
+    // hours are ~6.25 trading hours, but decay is calendar; give a rough hourly feel
+    return {
+      perDay, perDayPct,
+      perHour: perDay / 6.25,
+      // if the trade goes nowhere, days until theta eats the whole premium
+      daysToZero: perDay > 0 ? opt.lastPrice / perDay : null
+    };
+  },
+
+  // This strike's IV against the ATM IV of the same chain — vertical skew.
+  // A wing trading well above ATM IV is expensive relative to the board.
+  ivSkew(opt, chain, spot) {
+    if (!opt.impliedVolatility || !chain?.strikes?.length || !spot) return null;
+    const atmRow = chain.strikes.reduce((p, q) =>
+      Math.abs(q.strikePrice - spot) < Math.abs(p.strikePrice - spot) ? q : p);
+    const ce = atmRow.CE?.impliedVolatility || 0, pe = atmRow.PE?.impliedVolatility || 0;
+    const atmIV = [ce, pe].filter(v => v > 0);
+    if (!atmIV.length) return null;
+    const atm = atmIV.reduce((a, b) => a + b, 0) / atmIV.length;
+    const diff = opt.impliedVolatility - atm;
+    return { atmIV: atm, strikeIV: opt.impliedVolatility, diff,
+             verdict: diff > 2 ? 'RICH' : diff < -2 ? 'CHEAP' : 'FAIR' };
+  },
+
+  // Everything a buyer needs for one strike, in one call.
+  // targetSpot / slSpot are where the underlying is expected to go (from the
+  // expected-move / setup), so payoff is projected, not assumed.
+  analyzeStrike(opt, spot, isCall, targetSpot, slSpot, daysHeld = 1, chain = null) {
+    const premium = opt.lastPrice;
+    const be = this.breakeven(opt.strikePrice, premium, isCall);
+    const bePct = this.breakevenMovePct(spot, opt.strikePrice, premium, isCall);
+    const em = this.expectedMove(spot, opt.impliedVolatility, opt.daysToExpiry);
+    const pop = this.probOfProfit(opt, spot, isCall);
+    const theta = this.thetaDecay(opt);
+    const skew = chain ? this.ivSkew(opt, chain, spot) : null;
+
+    let projTarget = null, projSL = null, rr = null;
+    if (targetSpot != null && slSpot != null) {
+      projTarget = this.projectValue(opt, spot, targetSpot, daysHeld, isCall);
+      projSL = this.projectValue(opt, spot, slSpot, daysHeld, isCall);
+      const reward = projTarget != null ? projTarget - premium : null;
+      const risk = projSL != null ? premium - projSL : null;
+      rr = (risk && risk > 0 && reward != null) ? reward / risk : null;
+    }
+    // Is the target reachable within the expected move? (target move vs 1σ)
+    let reachable = null;
+    if (em && targetSpot != null && spot) {
+      const need = Math.abs(targetSpot - spot);
+      reachable = need <= em.oneSigma ? 'within 1σ' : need <= em.oneSigma * 1.5 ? 'a stretch (1–1.5σ)' : 'beyond 1.5σ';
+    }
+
+    return {
+      strike: opt.strikePrice, premium, delta: opt.delta, theta: opt.theta,
+      breakeven: be, breakevenMovePct: bePct,
+      expectedMove: em, pop, thetaDecay: theta, skew,
+      projTarget, projSL, projRR: rr, reachable
+    };
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SMART STRIKE SELECTOR v2
+// Instead of "ATM if confident, ITM-1 if not", it scores real strikes across the
+// ITM→OTM range on the things that decide a buyer's outcome — delta, breakeven
+// distance vs the expected move, theta efficiency, liquidity, IV skew — and picks
+// the archetype that fits the setup (conviction + time to expiry).
+// ═══════════════════════════════════════════════════════════════════════════════
+function smartStrikeSelect(chain, spot, direction, confidence, opts = {}) {
+  if (!chain?.strikes?.length || !spot || direction === BIAS.NEUTRAL) return null;
+  const isCall = direction === BIAS.BULL;
+  const side = isCall ? 'CE' : 'PE';
+  const strikes = chain.strikes.slice().sort((a, b) => a.strikePrice - b.strikePrice);
+  const atmRow = strikes.reduce((p, q) => Math.abs(q.strikePrice - spot) < Math.abs(p.strikePrice - spot) ? q : p);
+  const atmIdx = strikes.findIndex(s => s.strikePrice === atmRow.strikePrice);
+
+  // Where do we expect the underlying to travel? Prefer a supplied target,
+  // else one expected-move sigma in the trade's direction.
+  const em0 = OptionsMath.expectedMove(spot, atmRow[side]?.impliedVolatility || 15, atmRow[side]?.daysToExpiry ?? 5);
+  const sigma = em0 ? em0.oneSigma : spot * 0.02;
+  const targetSpot = opts.targetSpot != null ? opts.targetSpot : spot + (isCall ? 1 : -1) * sigma;
+  const slSpot     = opts.slSpot     != null ? opts.slSpot     : spot - (isCall ? 1 : -1) * sigma * 0.6;
+  const dte = atmRow[side]?.daysToExpiry ?? 5;
+  const daysHeld = dte <= 1 ? 0.3 : 1;
+
+  // Which delta band do we want? Conviction buys closer to the money; more time
+  // lets us reach for cheaper deltas; expiry day forbids far OTM (theta grave).
+  let wantDelta, archetype;
+  if (dte <= 1)                         { wantDelta = 0.55; archetype = 'ATM (expiry — max gamma, no OTM)'; }
+  else if (confidence >= 80)            { wantDelta = 0.45; archetype = 'slightly OTM (high conviction, room to run)'; }
+  else if (confidence >= 65)            { wantDelta = 0.55; archetype = 'ATM (balanced)'; }
+  else                                  { wantDelta = 0.68; archetype = 'ITM (lower conviction — higher delta, less theta)'; }
+
+  const cands = strikes
+    .slice(Math.max(0, atmIdx - 3), atmIdx + 5)
+    .map(s => {
+      const o = s[side];
+      if (!o || !o.lastPrice) return null;
+      const liq = strikeLiquidity(o);
+      const a = OptionsMath.analyzeStrike(o, spot, isCall, targetSpot, slSpot, daysHeld, chain);
+      const absDelta = Math.abs(o.delta || 0);
+      const moneyness = s.strikePrice === atmRow.strikePrice ? 'ATM'
+        : (isCall ? (s.strikePrice > spot ? 'OTM' : 'ITM') : (s.strikePrice < spot ? 'OTM' : 'ITM'));
+      return { row: s, opt: o, side, liq, analysis: a, absDelta, moneyness };
+    })
+    .filter(Boolean);
+
+  if (!cands.length) return null;
+
+  // Score each candidate. Everything is normalised so no single term dominates.
+  cands.forEach(c => {
+    let score = 0;
+    // 1. delta fit to the wanted band (closer = better)
+    score += Math.max(0, 30 - Math.abs(c.absDelta - wantDelta) * 100);
+    // 2. liquidity
+    score += c.liq.grade === 'GOOD' ? 20 : c.liq.grade === 'FAIR' ? 8 : -40;
+    // 3. breakeven reachable within the expected move
+    const bePct = Math.abs(c.analysis.breakevenMovePct || 99);
+    const emPct = em0 ? em0.oneSigmaPct : 2;
+    score += bePct <= emPct ? 18 : bePct <= emPct * 1.5 ? 8 : -10;
+    // 4. theta efficiency — punish strikes bleeding a big % of premium per day
+    const thPct = c.analysis.thetaDecay?.perDayPct ?? 10;
+    score += thPct < 4 ? 12 : thPct < 8 ? 4 : -8;
+    // 5. real projected R:R
+    const rr = c.analysis.projRR;
+    if (rr != null) score += rr >= 2 ? 15 : rr >= 1.3 ? 8 : rr >= 1 ? 2 : -8;
+    // 6. IV skew — prefer not overpaying vs the board
+    if (c.analysis.skew) score += c.analysis.skew.verdict === 'CHEAP' ? 8 : c.analysis.skew.verdict === 'RICH' ? -8 : 0;
+    c.score = Math.round(score);
+  });
+
+  const ranked = cands.filter(c => c.liq.tradable).sort((a, b) => b.score - a.score);
+  const pool = ranked.length ? ranked : cands.sort((a, b) => b.score - a.score);
+  const best = pool[0];
+
+  return {
+    archetype, wantDelta, targetSpot, slSpot, dte,
+    expectedMove: em0,
+    best,
+    alternatives: pool.slice(1, 4),
+    allBlocked: !ranked.length
+  };
 }
 
 // Target/SL scaled by the option's own implied volatility instead of a fixed multiplier.
