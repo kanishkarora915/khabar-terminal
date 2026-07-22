@@ -116,6 +116,14 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // ── Zerodha login callback lands here if the Kite app's redirect URL is set
+  //    to /api/callback or /callback. Serve the app so it can read the
+  //    request_token from the query string, rather than routing to a function. ──
+  if (url.startsWith('/api/callback') || url.startsWith('/callback')) {
+    serveStatic(req, res, '/index.html');
+    return;
+  }
+
   // ── /api/* → nse (same redirect Netlify had) ──
   if (url.startsWith('/api/')) {
     const body = await readBody(req);
