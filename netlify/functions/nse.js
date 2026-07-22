@@ -5,7 +5,7 @@ const zlib = require('zlib');
 let cookieCache = { cookies: '', ts: 0 };
 const COOKIE_TTL = 60000;
 const cache = {};
-const CACHE_TTL = { quote: 8000, 'option-chain': 10000, indices: 8000, 'index-stocks': 15000, search: 30000, history: 300000, 'event-calendar': 3600000, 'fo-ban': 1800000 };
+const CACHE_TTL = { quote: 8000, 'option-chain': 10000, indices: 8000, 'index-stocks': 15000, search: 30000, history: 300000, 'event-calendar': 3600000, 'fo-ban': 1800000, 'participant-oi': 3600000 };
 
 function httpGet(hostname, path, headers = {}, timeout = 15000, extra = {}) {
   return new Promise((resolve, reject) => {
@@ -265,6 +265,39 @@ exports.handler = async (event) => {
         break;
       }
 
+      case 'participant-oi': {
+        // Who is positioned how — FII / DII / Pro / Client index & stock F&O OI.
+        // Published EOD for the previous trading day on the archives host (not
+        // Akamai-gated). Try the last several days until a file exists.
+        const pad = n => String(n).padStart(2, '0');
+        let csv = null, forDate = null;
+        const now = new Date();
+        for (let back = 0; back < 6 && !csv; back++) {
+          const d = new Date(now); d.setDate(d.getDate() - back);
+          const ds = pad(d.getDate()) + pad(d.getMonth() + 1) + d.getFullYear();
+          const r = await httpGetText('nsearchives.nseindia.com', `/content/nsccl/fao_participant_oi_${ds}.csv`, {}, 8000);
+          if (r?.text && r.text.includes('Client Type')) { csv = r.text; forDate = ds; }
+        }
+        if (!csv) { result = { data: { ok: false, error: 'participant OI file not found for recent dates' } }; break; }
+
+        const lines = csv.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+        const num = x => parseInt(String(x).replace(/[^0-9-]/g, ''), 10) || 0;
+        const participants = {};
+        lines.forEach(l => {
+          const c = l.split(',').map(x => x.trim());
+          const who = (c[0] || '').replace(/"/g, '');
+          if (!['Client', 'DII', 'FII', 'Pro', 'TOTAL'].includes(who)) return;
+          participants[who] = {
+            futIdxLong: num(c[1]), futIdxShort: num(c[2]),
+            futStkLong: num(c[3]), futStkShort: num(c[4]),
+            optIdxCallLong: num(c[5]), optIdxPutLong: num(c[6]),
+            optIdxCallShort: num(c[7]), optIdxPutShort: num(c[8]),
+            totalLong: num(c[13]), totalShort: num(c[14])
+          };
+        });
+        result = { data: { ok: true, forDate, participants, fetched_at: Date.now() } };
+        break;
+      }
       case 'fo-ban': {
         // The archives subdomain serves a plain CSV and is not Akamai-gated.
         const r = await httpGetText('nsearchives.nseindia.com', '/content/fo/fo_secban.csv', {}, 10000)

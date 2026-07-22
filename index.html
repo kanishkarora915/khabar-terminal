@@ -9413,6 +9413,41 @@ const PANELS = [
     }
   },
   {
+    id: 'PARTICIPANT', name: 'PARTICIPANT OI (FII/DII)', source: 'nse', icon: '🏦',
+    async compute() {
+      const p = BRAIN.state.participant;
+      if (!p?.participants) {
+        return { bias: BIAS.NEUTRAL, confidence: 0, reasoning: p?.error ? 'Participant OI: ' + p.error : 'Loading participant OI…',
+          data: [{ lbl: 'Status', val: p?.error ? 'UNAVAILABLE' : 'LOADING', cls: 'm' }],
+          formula: '// FII/DII/Pro/Client index+stock F&O OI, EOD from NSE archives' };
+      }
+      const fii = p.participants.FII || {};
+      // FII index-futures net (long − short) — their directional bet.
+      const futNet = (fii.futIdxLong || 0) - (fii.futIdxShort || 0);
+      // FII index-options net long call vs long put — bullish vs bearish option book.
+      const optNet = (fii.optIdxCallLong || 0) - (fii.optIdxPutLong || 0);
+      // This is EOD positioning (previous session), so it leans, doesn't drive.
+      let bull = 0, bear = 0;
+      if (futNet > 20000) bull += 25; else if (futNet < -20000) bear += 25;
+      if (optNet > 100000) bull += 15; else if (optNet < -100000) bear += 15;
+      const bias = bull > bear + 10 ? BIAS.BULL : bear > bull + 10 ? BIAS.BEAR : BIAS.NEUTRAL;
+      const dii = p.participants.DII || {};
+      const diiFutNet = (dii.futIdxLong || 0) - (dii.futIdxShort || 0);
+      return {
+        bias, confidence: Math.min(55, Math.max(bull, bear, 20)),
+        reasoning: `FII index fut net ${futNet >= 0 ? '+' : ''}${bfmtCr(futNet)} · FII opt call−put ${optNet >= 0 ? '+' : ''}${bfmtCr(optNet)} (as of ${p.forDate ? p.forDate.slice(0,2)+'/'+p.forDate.slice(2,4) : '—'})`,
+        data: [
+          { lbl: 'FII fut net',   val: (futNet >= 0 ? '+' : '') + bfmtCr(futNet), cls: futNet > 0 ? 'g' : futNet < 0 ? 'r' : '' },
+          { lbl: 'FII call long',  val: bfmtCr(fii.optIdxCallLong || 0), cls: 'g' },
+          { lbl: 'FII put long',   val: bfmtCr(fii.optIdxPutLong || 0), cls: 'r' },
+          { lbl: 'DII fut net',   val: (diiFutNet >= 0 ? '+' : '') + bfmtCr(diiFutNet), cls: diiFutNet > 0 ? 'g' : 'r' },
+          { lbl: 'As of',          val: p.forDate ? p.forDate.slice(0,2)+'/'+p.forDate.slice(2,4)+'/'+p.forDate.slice(4) : '—', cls: 'm' }
+        ],
+        formula: `FII fut net = idxLong − idxShort = ${bfmtCr(futNet)}\nFII opt net = callLong − putLong = ${bfmtCr(optNet)}\nEOD positioning → leans, does not drive`
+      };
+    }
+  },
+  {
     id: 'GLOBAL', name: 'GLOBAL CONTEXT', source: 'finnhub', icon: '🌐',
     async compute() {
       const g = BRAIN.state.global;
@@ -9558,6 +9593,15 @@ async function brainFetchTick() {
       } else if (BRAIN.state.optionChain) {
         ctx.optionChain = BRAIN.state.optionChain;  // reuse cached
       }
+    }
+
+    // Participant OI (FII/DII/Pro/Client) — EOD positioning, fetched once/hour.
+    if (Date.now() - (BRAIN.state.participantFetchedAt || 0) > 3600000) {
+      try {
+        const pr = await api('nse', { action: 'participant-oi' });
+        if (pr?.ok && pr.participants) { BRAIN.state.participant = pr; BRAIN.state.participantFetchedAt = Date.now(); }
+        else BRAIN.state.participant = { error: pr?.error || 'unavailable' };
+      } catch (e) { BRAIN.state.participant = { error: e.message }; }
     }
 
     // Global cross-asset context — US-ETF proxies via Finnhub, slow cadence.
