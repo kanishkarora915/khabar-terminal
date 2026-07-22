@@ -153,6 +153,35 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  // ── Self-clean: unregister the service worker + clear caches, then reload ──
+  // A one-visit fix when a stale SW keeps serving a bad cached response.
+  if (url.startsWith('/reset')) {
+    const html = `<!doctype html><meta charset=utf-8>
+<title>Resetting…</title>
+<body style="background:#04080e;color:#e8edf5;font:14px monospace;padding:40px">
+<div id=m>Clearing cache and service worker…</div>
+<script>
+(async () => {
+  try {
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      for (const r of regs) await r.unregister();
+    }
+    if (window.caches) {
+      const keys = await caches.keys();
+      for (const k of keys) await caches.delete(k);
+    }
+    document.getElementById('m').textContent = 'Done. Loading the app…';
+  } catch (e) {
+    document.getElementById('m').textContent = 'Cleared. Loading…';
+  }
+  setTimeout(() => { location.replace('/'); }, 800);
+})();
+</script></body>`;
+    res.writeHead(200, { ...CORS, 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' }).end(html);
+    return;
+  }
+
   // ── Health check for Render ──
   if (url === '/healthz') {
     res.writeHead(200, { 'Content-Type': 'application/json' })

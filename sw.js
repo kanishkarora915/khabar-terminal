@@ -1,5 +1,5 @@
 // KHABAR Service Worker — PWA Support v5.1 (Real IV + NFO symbols + live auto-P&L)
-const CACHE_NAME = 'khabar-v41-logincb';
+const CACHE_NAME = 'khabar-v42-reset';
 const STATIC_ASSETS = [
   '/icon.svg',
   '/icon-192.png',
@@ -38,7 +38,7 @@ self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
   // API calls — always network, never cache
-  if (url.pathname.startsWith('/.netlify/functions/') || url.pathname.startsWith('/store/') || url.pathname === '/healthz') {
+  if (url.pathname.startsWith('/.netlify/functions/') || url.pathname.startsWith('/store/') || url.pathname === '/healthz' || url.pathname.startsWith('/reset')) {
     event.respondWith(fetch(event.request));
     return;
   }
