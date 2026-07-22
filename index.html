@@ -12162,7 +12162,7 @@ function paperBookRender() {
           ? '<div style="margin-top:2px">' + part.t.map(x => `<div style="color:var(--t);padding-left:10px;line-height:1.5">• ${x}</div>`).join('') + '</div>'
           : `<span style="color:var(--t)"> ${part.t}</span>`}
       </div>`).join('')}
-      ${!isOpen ? `<div style="margin-top:6px;padding-top:6px;border-top:1px dashed var(--bd);font-family:var(--f2);font-size:10px"><span style="color:${pnl>=0?'var(--g)':'var(--r)'};font-weight:700">EXIT:</span> <span style="color:var(--t)">${p.closeReason || 'closed'} @ ₹${(p.closePrice||0).toFixed(2)} · P&L ${pnl>=0?'+':''}₹${pnl.toFixed(0)} · held ${Math.round(((p.closedAt||now)-p.openedAt)/60000)}m</span></div>` : ''}
+      ${!isOpen ? `<div style="margin-top:6px;padding-top:6px;border-top:1px dashed var(--bd);font-family:var(--f2);font-size:10px"><span style="color:${pnl>=0?'var(--g)':'var(--r)'};font-weight:700">EXIT:</span> <span style="color:var(--t)">${p.closeReason || 'closed'} @ ₹${(p.closePrice||0).toFixed(2)} · P&L ${pnl>=0?'+':''}₹${pnl.toFixed(0)} · held ${Math.round(((p.closedAt||Date.now())-p.openedAt)/60000)}m</span></div>` : ''}
     </td></tr>` : '';
     return `<tr class="pos-row" style="border-bottom:1px solid var(--bd);${hasReason?'cursor:pointer':''}" ${hasReason?`onclick="const r=document.getElementById('reason-${p.id}');if(r)r.style.display=r.style.display==='none'?'table-row':'none'"`:''}>
       <td style="padding:6px 10px;color:var(--m)">${hasReason ? '<span style="color:var(--a)">▸</span> ' : ''}${i + 1}</td>
