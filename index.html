@@ -11964,12 +11964,14 @@ function paperBookLoad() {
       // autoSchedule defaults to ON (armed) — undefined means a pre-schedule save.
       PAPER_BOOK.autoSchedule = data.autoSchedule !== false;
       PAPER_BOOK.autoStocks = !!data.autoStocks;
-      // The checkbox reflects "armed", not the live firing state — it stays
-      // checked overnight and the schedule flips autoBrain by the clock.
-      if ($('pb-auto-brain'))  $('pb-auto-brain').checked  = PAPER_BOOK.autoSchedule;
-      if ($('pb-auto-stocks')) $('pb-auto-stocks').checked = PAPER_BOOK.autoStocks;
     }
   } catch(e) { console.warn('[PB] load err', e); }
+  // Sync the checkboxes unconditionally — a fresh user has no saved key, but the
+  // default is still armed (autoSchedule=true), and the box must show that. The
+  // checkbox reflects "armed", not live firing; the schedule flips autoBrain by
+  // the clock while this stays checked overnight.
+  if ($('pb-auto-brain'))  $('pb-auto-brain').checked  = PAPER_BOOK.autoSchedule;
+  if ($('pb-auto-stocks')) $('pb-auto-stocks').checked = PAPER_BOOK.autoStocks;
 }
 function paperBookSave() {
   try {

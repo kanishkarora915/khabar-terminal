@@ -1,5 +1,5 @@
 // KHABAR Service Worker — PWA Support v5.1 (Real IV + NFO symbols + live auto-P&L)
-const CACHE_NAME = 'khabar-v50-autosched';
+const CACHE_NAME = 'khabar-v51-autosched';
 const STATIC_ASSETS = [
   '/icon.svg',
   '/icon-192.png',
